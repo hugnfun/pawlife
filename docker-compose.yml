@@ -1,0 +1,120 @@
+version: "3.9"
+
+services:
+  # PostgreSQL 数据库 (pgvector 镜像支持向量检索)
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: pawlife-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pawlife}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pawlife_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-pawlife}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pawlife"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pawlife-net
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: pawlife-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pawlife-net
+
+  # 后端 API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pawlife-backend
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-pawlife}:${POSTGRES_PASSWORD:-pawlife_dev}@postgres:5432/${POSTGRES_DB:-pawlife}
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=production
+      - DEBUG=false
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pawlife-net
+    restart: unless-stopped
+
+  # Celery Worker
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pawlife-celery
+    command: celery -A services.celery_app worker --loglevel=info --concurrency=2
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-pawlife}:${POSTGRES_PASSWORD:-pawlife_dev}@postgres:5432/${POSTGRES_DB:-pawlife}
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pawlife-net
+    restart: unless-stopped
+
+  # Celery Beat (定时任务调度)
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pawlife-celery-beat
+    command: celery -A services.celery_app beat --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-pawlife}:${POSTGRES_PASSWORD:-pawlife_dev}@postgres:5432/${POSTGRES_DB:-pawlife}
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - pawlife-net
+    restart: unless-stopped
+
+  # Nginx 前端 + 反向代理
+  nginx:
+    image: nginx:alpine
+    container_name: pawlife-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+    networks:
+      - pawlife-net
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  pawlife-net:
+    driver: bridge

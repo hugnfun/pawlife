@@ -208,6 +208,11 @@ class Pet(Base, UUIDMixin, TimeStampMixin):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+    memories: Mapped[List["PetMemory"]] = relationship(
+        back_populates="pet",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
     def __repr__(self) -> str:
         return f"<Pet(id={self.id}, name={self.name}, species={self.species})>"

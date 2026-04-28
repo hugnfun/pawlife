@@ -6,7 +6,6 @@
 
 import logging
 import httpx
-import uuid
 from typing import Optional
 from datetime import datetime, timedelta
 
@@ -198,7 +197,7 @@ async def get_profile(
     """获取当前用户资料接口。
 
     Args:
-        token: OAuth2 token
+        token: OAuth2 token (JWT Bearer)
         db: 数据库会话
 
     Returns:
@@ -207,26 +206,25 @@ async def get_profile(
     Raises:
         HTTPException: 未认证或用户不存在
     """
-    # 简化的 token 验证
-    if not token or not token.startswith("user_token_"):
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="未认证或 token 无效"
         )
 
-    # 提取 user_id
-    try:
-        user_id = token.replace("user_token_", "")
-        user_uuid = uuid.UUID(user_id)
-    except (ValueError, AttributeError):
+    # 使用 JWT 解码获取 user_id
+    from core.security import get_user_id_from_token
+    user_id = get_user_id_from_token(token)
+
+    if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="token 格式错误"
+            detail="token 无效或已过期"
         )
 
     # 查询用户
     from sqlalchemy import select
-    stmt = select(User).where(User.id == user_uuid, User.is_active == True)
+    stmt = select(User).where(User.id == user_id, User.is_active == True)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
@@ -288,16 +286,15 @@ async def _get_wechat_session(code: str, client: httpx.AsyncClient) -> dict:
         dict: 包含 openid, session_key, unionid 等信息的字典
 
     Raises:
-        httpx.HTTPError: HTTP 请求错误
+        HTTPException: 配置缺失或微信 API 返回错误
     """
     # 检查配置
     if not settings.wechat_app_id or not settings.wechat_app_secret:
-        logger.warning("微信配置未设置，使用模拟返回（开发模式）")
-        return {
-            "openid": f"mock_openid_{code[:10]}",
-            "session_key": "mock_session_key",
-            "unionid": f"mock_unionid_{code[:10]}" if len(code) > 10 else None,
-        }
+        logger.error("微信 AppID 或 AppSecret 未配置，无法进行微信登录")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="微信登录服务配置缺失，请联系管理员配置 WECHAT_APP_ID 和 WECHAT_APP_SECRET"
+        )
 
     # 构建请求 URL
     params = {
@@ -308,7 +305,49 @@ async def _get_wechat_session(code: str, client: httpx.AsyncClient) -> dict:
     }
 
     # 调用微信 API
-    response = await client.get(settings.wechat_login_url, params=params)
-    response.raise_for_status()
+    try:
+        response = await client.get(settings.wechat_login_url, params=params)
+        response.raise_for_status()
+        data = response.json()
 
-    return response.json()
+        # 检查微信返回的错误码
+        errcode = data.get("errcode")
+        if errcode is not None and errcode != 0:
+            errmsg = data.get("errmsg", "未知错误")
+            error_map = {
+                -1: "微信服务器繁忙，请稍后重试",
+                40029: "微信登录 code 无效或已过期",
+                40013: "微信 AppID 无效",
+                40125: "微信 AppSecret 错误",
+                41004: "微信 AppSecret 缺失",
+                45011: "微信登录频率限制，请1分钟后重试",
+            }
+            friendly_msg = error_map.get(errcode, errmsg)
+            logger.error(f"微信 jscode2session 接口返回错误: errcode={errcode}, errmsg={errmsg}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"微信登录失败: {friendly_msg}"
+            )
+
+        return data
+
+    except HTTPException:
+        raise
+    except httpx.HTTPStatusError as e:
+        logger.error(f"微信 API HTTP 错误: status={e.response.status_code}, body={e.response.text}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="微信登录服务暂时不可用，请稍后重试"
+        )
+    except httpx.TimeoutException:
+        logger.error("微信 API 请求超时")
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="微信登录服务响应超时，请稍后重试"
+        )
+    except httpx.RequestError as e:
+        logger.error(f"微信 API 网络错误: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="网络连接微信服务失败，请检查网络"
+        )

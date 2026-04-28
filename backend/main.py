@@ -18,9 +18,13 @@ from core.config import settings
 from routers import (
     auth_router,
     pets_router,
+    pet_detail_router,
     logs_router,
     ai_router,
     families_router,
+    chat_router,
+    account_router,
+    upload_router,
 )
 from services.database import db
 from services.redis import redis_service
@@ -41,7 +45,7 @@ async def lifespan(app: FastAPI):
     """
     # 启动时
     logger.info("PawLife 后端服务启动中...")
-    logger.info(f"环境: {settings.env}")
+    logger.info(f"环境: {settings.environment}")
     logger.info(f"调试模式: {settings.debug}")
     logger.info(f"数据库 URL: {settings.database_url[:20]}...")
     logger.info(f"Redis URL: {settings.redis_url[:20]}...")
@@ -163,6 +167,10 @@ app.include_router(pets_router, prefix=settings.api_prefix)
 app.include_router(logs_router, prefix=settings.api_prefix)
 app.include_router(ai_router, prefix=settings.api_prefix)
 app.include_router(families_router, prefix=settings.api_prefix)
+app.include_router(chat_router, prefix=settings.api_prefix)
+app.include_router(account_router, prefix=settings.api_prefix)
+app.include_router(pet_detail_router, prefix=settings.api_prefix)
+app.include_router(upload_router, prefix=settings.api_prefix)
 
 
 # 根路由
@@ -216,7 +224,7 @@ async def api_info():
     return {
         "name": "PawLife API",
         "version": "1.0.0",
-        "environment": settings.env,
+        "environment": settings.environment,
         "debug": settings.debug,
         "features": [
             "AI Native 对话接口",

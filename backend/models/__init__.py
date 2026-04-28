@@ -10,7 +10,9 @@ from .pet import Pet, PetSpecies, PetGender, NeuteredStatus, BodyConditionScore,
 from .log import MealLog, ActivityLog, WeightLog
 from .reminder import Reminder, ReminderType, RepeatType, ReminderStatus
 from .recipe import Recipe, RecipeIngredient, RecipeType, RecipeSource
-from .pet_memory import PetMemory
+from .memory import PetMemory
+from .nutrition import FoodNutrition
+from .audit import AuditLog
 
 __all__ = [
     # 基类
@@ -53,4 +55,10 @@ __all__ = [
 
     # 宠物记忆
     "PetMemory",
+
+    # 营养数据库
+    "FoodNutrition",
+
+    # 审计日志
+    "AuditLog",
 ]

@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.user import User, UserRole
 from services.database import get_db
 from core.security import get_user_id_from_token
+from core.config import settings
 
 # 配置日志
 logger = logging.getLogger(__name__)
@@ -46,6 +47,12 @@ async def get_current_user(
     """
     # 开发环境下允许无 token 进入，返回模拟用户
     if not token:
+        if settings.environment != "development":
+            logger.warning("生产环境尝试访问无认证接口")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="未提供认证 token"
+            )
         logger.warning("无认证 token，使用模拟用户（仅开发环境可用）")
         return _get_mock_user()
 

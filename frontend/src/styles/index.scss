@@ -1,0 +1,363 @@
+// ============================================
+// PawLife Design System - 温暖可爱风
+// ============================================
+
+// --- 色彩体系 ---
+// 主色：珊瑚橙，温暖、活力、宠物感
+$primary-color: #FF8C69;
+$primary-color-light: #FFF0EB;
+$primary-color-lighter: #FFF7F4;
+$primary-color-dark: #E8775A;
+
+// 辅助色
+$secondary-color: #7EC8E3; // 天蓝 - 信息提示
+$success-color: #95D5B2;    // 薄荷绿 - 更柔和
+$success-color-light: #EDF9F2;
+$warning-color: #FFD166;    // 暖黄 - 更可爱
+$warning-color-light: #FFF8E6;
+$error-color: #EF6461;      // 柔红 - 不刺眼
+$error-color-light: #FDECEB;
+
+// 中性色
+$text-primary: #2D2D2D;
+$text-regular: #595959;
+$text-secondary: #8C8C8C;
+$text-placeholder: #C0C0C0;
+$text-disabled: #D9D9D9;
+
+$border-color: #ECECEC;
+$divider-color: #F0F0F0;
+
+// 背景
+$bg-page: #FAF7F5;         // 暖灰页面背景
+$bg-card: #FFFFFF;
+$bg-input: #FAFAF8;        // 输入框背景 - 偏暖
+$bg-hover: #F5F0ED;        // hover 背景
+
+// --- 圆角体系 ---
+$radius-xs: 6px;
+$radius-sm: 10px;
+$radius-md: 14px;
+$radius-lg: 20px;
+$radius-xl: 28px;
+$radius-full: 50%;
+
+// --- 阴影体系 ---
+$shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+$shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.05);
+$shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+$shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+
+// --- 字体阶梯 ---
+$font-size-xs: 11px;
+$font-size-sm: 12px;
+$font-size-base: 14px;
+$font-size-md: 15px;
+$font-size-lg: 16px;
+$font-size-xl: 17px;
+$font-size-xxl: 20px;
+$font-size-display: 28px;
+
+// --- 间距阶梯 ---
+$spacing-xs: 4px;
+$spacing-sm: 8px;
+$spacing-md: 12px;
+$spacing-lg: 16px;
+$spacing-xl: 20px;
+$spacing-xxl: 24px;
+$spacing-xxxl: 32px;
+
+// ============================================
+// 重置样式
+// ============================================
+view, text, input, button, scroll-view, image {
+  box-sizing: border-box;
+}
+
+page {
+  height: 100%;
+  background-color: $bg-page;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  color: $text-primary;
+  font-size: $font-size-base;
+}
+
+// ============================================
+// 通用工具类
+// ============================================
+
+// 间距
+.m-0 { margin: 0; }
+.m-1 { margin: $spacing-xs; }
+.m-2 { margin: $spacing-sm; }
+.m-3 { margin: $spacing-md; }
+.m-4 { margin: $spacing-lg; }
+.mt-1 { margin-top: $spacing-xs; }
+.mt-2 { margin-top: $spacing-sm; }
+.mt-3 { margin-top: $spacing-md; }
+.mt-4 { margin-top: $spacing-lg; }
+.mb-1 { margin-bottom: $spacing-xs; }
+.mb-2 { margin-bottom: $spacing-sm; }
+.mb-3 { margin-bottom: $spacing-md; }
+.mb-4 { margin-bottom: $spacing-lg; }
+
+.p-0 { padding: 0; }
+.p-1 { padding: $spacing-xs; }
+.p-2 { padding: $spacing-sm; }
+.p-3 { padding: $spacing-md; }
+.p-4 { padding: $spacing-lg; }
+
+// 文字对齐
+.text-left { text-align: left; }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+
+// 颜色文字
+.text-primary { color: $primary-color; }
+.text-secondary { color: $text-secondary; }
+.text-success { color: $success-color; }
+.text-warning { color: $warning-color; }
+.text-error { color: $error-color; }
+
+// ============================================
+// 通用卡片
+// ============================================
+.card {
+  background-color: $bg-card;
+  border-radius: $radius-md;
+  box-shadow: $shadow-sm;
+  padding: $spacing-lg;
+  margin-bottom: $spacing-md;
+  transition: transform 0.2s ease;
+
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+// ============================================
+// 通用按钮
+// ============================================
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-sm $spacing-lg;
+  font-size: $font-size-base;
+  border-radius: $radius-sm;
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  font-weight: 500;
+
+  &.btn-primary {
+    background: linear-gradient(135deg, $primary-color 0%, $primary-color-dark 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba($primary-color, 0.3);
+
+    &:active {
+      transform: scale(0.97);
+      box-shadow: 0 1px 4px rgba($primary-color, 0.2);
+    }
+
+    &[disabled] {
+      opacity: 0.6;
+      transform: none;
+    }
+  }
+
+  &.btn-outline {
+    background-color: transparent;
+    border: 1px solid $primary-color;
+    color: $primary-color;
+
+    &:active {
+      background-color: $primary-color-light;
+    }
+  }
+
+  &.btn-danger {
+    background-color: transparent;
+    border: 1px solid $error-color;
+    color: $error-color;
+
+    &:active {
+      background-color: $error-color-light;
+    }
+  }
+
+  // 去除小程序按钮默认边框
+  &::after {
+    border: none;
+  }
+}
+
+// ============================================
+// 通用区块标题
+// ============================================
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $spacing-lg;
+
+  .section-title {
+    font-size: $font-size-xl;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  .edit-btn,
+  .action-link {
+    font-size: $font-size-base;
+    color: $primary-color;
+    background: none;
+    border: none;
+    padding: $spacing-xs $spacing-md;
+    line-height: 24px;
+
+    &::after {
+      border: none;
+    }
+  }
+}
+
+// ============================================
+// 空状态
+// ============================================
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: 80px;
+
+  .empty-icon {
+    font-size: 56px;
+    margin-bottom: $spacing-lg;
+    opacity: 0.8;
+  }
+
+  .empty-text {
+    font-size: $font-size-lg;
+    color: $text-regular;
+    margin-bottom: $spacing-sm;
+  }
+
+  .empty-hint {
+    font-size: $font-size-md;
+    color: $text-secondary;
+    margin-bottom: $spacing-xl;
+  }
+}
+
+// ============================================
+// 加载骨架屏
+// ============================================
+.skeleton {
+  background: linear-gradient(90deg, $divider-color 25%, #F8F6F4 50%, $divider-color 75%);
+  background-size: 200% 100%;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  border-radius: $radius-sm;
+}
+
+.skeleton-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: $radius-full;
+  @extend .skeleton;
+}
+
+.skeleton-title {
+  height: 20px;
+  width: 60%;
+  @extend .skeleton;
+}
+
+.skeleton-text {
+  height: 14px;
+  width: 80%;
+  margin-top: $spacing-sm;
+  @extend .skeleton;
+}
+
+.skeleton-card {
+  height: 120px;
+  margin-bottom: $spacing-md;
+  @extend .skeleton;
+  border-radius: $radius-md;
+}
+
+@keyframes skeleton-pulse {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+// ============================================
+// 通用 Loading 遮罩
+// ============================================
+.loading-mask {
+  text-align: center;
+  padding: $spacing-xxxl * 2;
+  color: $text-secondary;
+  font-size: $font-size-base;
+
+  .loading-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid $divider-color;
+    border-top-color: $primary-color;
+    border-radius: $radius-full;
+    margin: 0 auto $spacing-md;
+    animation: spin 0.8s linear infinite;
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+// ============================================
+// 过渡动画
+// ============================================
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+// 页面入场动画
+.page-enter {
+  animation: page-slide-in 0.3s ease-out;
+}
+
+@keyframes page-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// 列表项依次入场
+.stagger-enter {
+  animation: stagger-fade-in 0.4s ease-out both;
+}
+
+@keyframes stagger-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

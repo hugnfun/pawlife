@@ -2,7 +2,7 @@
 宠物相关的 Pydantic 模型。
 """
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional, List
 from uuid import UUID
@@ -93,8 +93,8 @@ class PetResponse(BaseModel):
     is_active: bool = Field(..., description="是否活跃")
     owner_id: UUID = Field(..., description="拥有者ID")
     family_id: Optional[UUID] = Field(None, description="所属家庭ID")
-    created_at: date = Field(..., description="创建时间")
-    updated_at: date = Field(..., description="更新时间")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
 
     class Config:
         """Pydantic 配置。"""

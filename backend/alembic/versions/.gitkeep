@@ -1,0 +1,14 @@
+# Alembic 迁移版本文件目录
+
+在此目录下运行以下命令生成迁移：
+    cd /path/to/pawlife
+    export PYTHONPATH=backend
+    alembic -c backend/alembic.ini revision --autogenerate -m "initial schema"
+
+应用迁移：
+    export PYTHONPATH=backend
+    alembic -c backend/alembic.ini upgrade head
+
+回滚迁移：
+    export PYTHONPATH=backend
+    alembic -c backend/alembic.ini downgrade -1

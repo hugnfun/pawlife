@@ -5,7 +5,6 @@ Redis 服务模块。
 """
 
 import json
-import pickle
 from typing import Any, Optional, Union, Dict, List
 from contextlib import asynccontextmanager
 from datetime import timedelta
@@ -78,8 +77,8 @@ class RedisService:
             bool: 是否设置成功
         """
         async with self.get_client() as client:
-            # 序列化值
-            serialized = pickle.dumps(value)
+            # 序列化值 (JSON 安全)
+            serialized = json.dumps(value).encode('utf-8')
             if expire:
                 if isinstance(expire, timedelta):
                     expire = int(expire.total_seconds())
@@ -102,9 +101,9 @@ class RedisService:
             if value is None:
                 return default
             try:
-                return pickle.loads(value)
-            except pickle.UnpicklingError:
-                # 如果是普通字符串，直接返回
+                return json.loads(value.decode("utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                # 如果解码失败，尝试直接返回字符串
                 try:
                     return value.decode("utf-8")
                 except UnicodeDecodeError:
@@ -281,6 +280,70 @@ class RedisService:
         # 更新最后一次喂食时间
         await self.set(key, timestamp, expire=window_seconds)
         return False
+
+    # ========== L1 工作记忆：会话对话历史 ==========
+    async def get_session_history(
+        self,
+        session_id: str,
+        max_messages: int = 20,
+    ) -> List[Dict[str, Any]]:
+        """获取会话历史（L1 工作记忆）。
+
+        Args:
+            session_id: 会话ID
+            max_messages: 保留最大消息条数
+
+        Returns:
+            消息列表，每个元素包含 role 和 content
+        """
+        key = f"session:{session_id}:history"
+        history = await self.get(key, default=[])
+        # 只返回最近 max_messages 条
+        if len(history) > max_messages:
+            history = history[-max_messages:]
+        return history
+
+    async def append_session_history(
+        self,
+        session_id: str,
+        role: str,
+        content: str,
+        ttl_seconds: int = 7200,  # 2小时
+    ) -> bool:
+        """追加消息到会话历史（L1 工作记忆）。
+
+        Args:
+            session_id: 会话ID
+            role: 角色 (user/assistant)
+            content: 内容
+            ttl_seconds: 过期时间（秒）
+
+        Returns:
+            是否设置成功
+        """
+        key = f"session:{session_id}:history"
+        history = await self.get(key, default=[])
+        history.append({
+            "role": role,
+            "content": content,
+            "timestamp": int(__import__('time').time()),
+        })
+        return await self.set(key, history, expire=ttl_seconds)
+
+    async def clear_session_history(
+        self,
+        session_id: str,
+    ) -> int:
+        """清空会话历史。
+
+        Args:
+            session_id: 会话ID
+
+        Returns:
+            删除的键数量
+        """
+        key = f"session:{session_id}:history"
+        return await self.delete(key)
 
     # 健康检查
     async def health_check(self) -> bool:

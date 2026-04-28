@@ -376,3 +376,215 @@ async def set_active_pet(
         )
 
 
+# ========== 宠物详情子资源（/pet/{pet_id}/...）==========
+# 前端 api/pet-profile.ts 使用单数 /pet/ 路径，这里单独创建路由实例匹配
+
+pet_detail_router = APIRouter(prefix="/pet", tags=["宠物详情"])
+
+
+@pet_detail_router.get(
+    "/{pet_id}/profile",
+    summary="获取宠物档案详情",
+    description="获取宠物完整档案信息（前端 pet-profile 页面使用）。"
+)
+async def get_pet_profile_detail(
+    pet_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """获取宠物档案详情（兼容前端 /pet/{petId}/profile 路径）。"""
+    try:
+        stmt = select(Pet).where(
+            and_(
+                Pet.id == pet_id,
+                Pet.owner_id == current_user.id,
+                Pet.is_active == True,
+            )
+        )
+        result = await db.execute(stmt)
+        pet = result.scalar_one_or_none()
+
+        if pet is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="宠物不存在或无权访问"
+            )
+
+        return PetResponse.model_validate(pet)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"获取宠物档案详情失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="获取宠物档案详情失败"
+        )
+
+
+@pet_detail_router.get(
+    "/{pet_id}/vaccines",
+    summary="获取疫苗记录",
+    description="获取宠物的疫苗接种记录列表。"
+)
+async def get_vaccine_records(
+    pet_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """获取宠物疫苗记录。
+
+    Args:
+        pet_id: 宠物ID
+        db: 数据库会话
+        current_user: 当前登录用户
+
+    Returns:
+        疫苗记录列表
+    """
+    try:
+        # 验证宠物权限
+        stmt = select(Pet).where(
+            and_(
+                Pet.id == pet_id,
+                Pet.owner_id == current_user.id,
+                Pet.is_active == True,
+            )
+        )
+        result = await db.execute(stmt)
+        pet = result.scalar_one_or_none()
+
+        if pet is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="宠物不存在或无权访问"
+            )
+
+        from models.pet import VaccineRecord
+
+        stmt = select(VaccineRecord).where(
+            VaccineRecord.pet_id == pet_id
+        ).order_by(VaccineRecord.administered_date.desc())
+
+        result = await db.execute(stmt)
+        records = result.scalars().all()
+
+        return [
+            {
+                "id": str(r.id),
+                "pet_id": str(r.pet_id),
+                "vaccine_name": r.vaccine_name,
+                "vaccine_type": "",
+                "vaccine_date": r.administered_date.isoformat() if r.administered_date else "",
+                "next_dose_date": r.next_due_date.isoformat() if r.next_due_date else None,
+                "notes": r.notes,
+                "created_at": r.created_at.isoformat() if r.created_at else "",
+            }
+            for r in records
+        ]
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"获取疫苗记录失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="获取疫苗记录失败"
+        )
+
+
+@pet_detail_router.get(
+    "/{pet_id}/diet-recipe",
+    summary="获取当前饮食方案",
+    description="获取宠物当前激活的饮食方案。"
+)
+async def get_diet_recipe(
+    pet_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """获取宠物当前激活的饮食方案。
+
+    Args:
+        pet_id: 宠物ID
+        db: 数据库会话
+        current_user: 当前登录用户
+
+    Returns:
+        当前饮食方案，如果没有返回 null
+    """
+    try:
+        # 验证宠物权限
+        stmt = select(Pet).where(
+            and_(
+                Pet.id == pet_id,
+                Pet.owner_id == current_user.id,
+                Pet.is_active == True,
+            )
+        )
+        result = await db.execute(stmt)
+        pet = result.scalar_one_or_none()
+
+        if pet is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="宠物不存在或无权访问"
+            )
+
+        from models.recipe import Recipe, RecipeIngredient
+
+        stmt = select(Recipe).where(
+            and_(
+                Recipe.pet_id == pet_id,
+                Recipe.is_active == True,
+            )
+        ).order_by(Recipe.created_at.desc()).limit(1)
+
+        result = await db.execute(stmt)
+        recipe = result.scalar_one_or_none()
+
+        if recipe is None:
+            return None
+
+        # 获取食材列表
+        ing_stmt = select(RecipeIngredient).where(
+            RecipeIngredient.recipe_id == recipe.id
+        )
+        ing_result = await db.execute(ing_stmt)
+        ingredients = ing_result.scalars().all()
+
+        # 按餐次分组（简化处理，直接列出所有食材）
+        meals = []
+        for ing in ingredients:
+            meals.append({
+                "time": "",
+                "food": ing.food_name,
+                "amount": float(ing.amount) if ing.amount else 0,
+                "unit": ing.unit,
+            })
+
+        return {
+            "id": str(recipe.id),
+            "pet_id": str(recipe.pet_id),
+            "name": recipe.name,
+            "description": recipe.description or "",
+            "daily_calories": float(recipe.daily_calories_target) if recipe.daily_calories_target else 0,
+            "protein_ratio": float(recipe.protein_target_percent) if recipe.protein_target_percent else 0,
+            "fat_ratio": float(recipe.fat_target_percent) if recipe.fat_target_percent else 0,
+            "carb_ratio": float(recipe.carb_target_percent) if recipe.carb_target_percent else 0,
+            "meals": meals,
+            "is_active": recipe.is_active,
+            "created_at": recipe.created_at.isoformat() if recipe.created_at else "",
+            "updated_at": recipe.updated_at.isoformat() if recipe.updated_at else "",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"获取饮食方案失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="获取饮食方案失败"
+        )
+
+

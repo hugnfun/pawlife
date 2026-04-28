@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     debug: bool = False
     environment: str = "development"
+    host: str = "0.0.0.0"
+    port: int = 8000
     cors_origins: List[str] = ["http://localhost:5173", "http://localhost:8080"]
     api_prefix: str = "/api/v1"
 
@@ -53,6 +55,9 @@ class Settings(BaseSettings):
     tencent_cos_region: str = "ap-beijing"
     tencent_cos_bucket: str = "pawlife"
 
+    # 腾讯地图配置
+    tencent_map_key: Optional[str] = None
+
     # 微信小程序配置
     wechat_app_id: Optional[str] = None
     wechat_app_secret: Optional[str] = None
@@ -67,6 +72,35 @@ class Settings(BaseSettings):
     # 文件上传配置
     max_upload_size: int = 10 * 1024 * 1024  # 10MB
     allowed_image_types: List[str] = ["image/jpeg", "image/png", "image/gif"]
+
+    # USDA FoodData Central API 配置
+    usda_api_key: Optional[str] = None
+    usda_api_base_url: str = "https://api.nal.usda.gov/fdc/v1"
+
+    # Celery 配置
+    celery_broker_url: str = "redis://localhost:6379/1"
+    celery_result_backend: str = "redis://localhost:6379/2"
+
+    # Consul 配置
+    consul_host: str = "localhost"
+    consul_port: int = 8500
+    consul_enabled: bool = False
+    consul_token: Optional[str] = None
+    consul_kv_prefix: str = "pawlife/config"
+
+    # Vault 配置
+    vault_addr: str = "http://localhost:8200"
+    vault_token: Optional[str] = None
+    vault_enabled: bool = False
+    vault_kv_mount: str = "secret"
+    vault_kv_path: str = "pawlife"
+
+    # 审计日志配置
+    audit_enabled: bool = True
+    audit_exclude_paths: List[str] = ["/health", "/", "/api/info", "/docs", "/redoc"]
+
+    # 加密配置
+    encryption_key: Optional[str] = None  # Fernet key, 自动生成如果未设置
 
     # 模型配置
     model_config = SettingsConfigDict(

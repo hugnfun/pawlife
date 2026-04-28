@@ -1,0 +1,37 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# WorkBuddy
+.workbuddy
+
+# Node
+frontend/node_modules
+frontend/dist
+frontend/.env.*
+
+# Python
+backend/__pycache__
+backend/*.pyc
+backend/.env
+backend/.venv
+backend/venv
+
+# Tests
+tests/
+
+# Docs
+docs/
+*.md
+CLAUDE.md
+
+# Misc
+*.log
+.DS_Store
+Thumbs.db
