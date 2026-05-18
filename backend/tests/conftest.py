@@ -121,6 +121,17 @@ async def test_app(test_engine):
     mock_redis.get_session_history = AsyncMock(return_value=[])
     mock_redis.append_session_history = AsyncMock(return_value=True)
     mock_redis.clear_session_history = AsyncMock(return_value=1)
+    # 日志缓存方法（Cache-Aside）
+    mock_redis.get_log_cache = AsyncMock(return_value=None)  # 默认缓存未命中
+    mock_redis.set_log_cache = AsyncMock(return_value=True)
+    mock_redis.invalidate_log_cache = AsyncMock(return_value=0)
+    mock_redis._build_log_cache_key = MagicMock(return_value="cache:test:key")
+    # 缓存常量
+    mock_redis.CACHE_PREFIX_MEAL_LOGS = "cache:meal_logs"
+    mock_redis.CACHE_PREFIX_WEIGHT_LOGS = "cache:weight_logs"
+    mock_redis.CACHE_NULL_SENTINEL = "__NULL__"
+    mock_redis.CACHE_TTL_NORMAL = 300
+    mock_redis.CACHE_TTL_NULL = 60
 
     async def override_get_redis():
         return mock_redis
@@ -219,4 +230,58 @@ def mock_redis():
     redis.exists = AsyncMock(side_effect=mock_exists)
     redis.health_check = AsyncMock(return_value=True)
     redis.dispose = AsyncMock()
+
+    # 日志缓存方法（基于 _data 实现，可用于集成测试）
+    from services.redis import RedisService
+
+    def _build_key(prefix, pet_id, **kwargs):
+        parts = [prefix, pet_id]
+        for k in sorted(kwargs.keys()):
+            v = kwargs[k]
+            if v is not None:
+                parts.append(f"{k}={v}")
+        return ":".join(parts)
+
+    async def mock_get_log_cache(prefix, pet_id, **kwargs):
+        key = _build_key(prefix, pet_id, **kwargs)
+        return redis._data.get(key)
+
+    async def mock_set_log_cache(prefix, pet_id, data, **kwargs):
+        key = _build_key(prefix, pet_id, **kwargs)
+        if data is None or (isinstance(data, dict) and data.get("total", 1) == 0):
+            redis._data[key] = RedisService.CACHE_NULL_SENTINEL
+            redis._expire[key] = RedisService.CACHE_TTL_NULL
+        else:
+            redis._data[key] = data
+            redis._expire[key] = RedisService.CACHE_TTL_NORMAL
+        return True
+
+    async def mock_invalidate_log_cache(pet_id, prefix=None):
+        prefixes = [prefix] if prefix else [
+            RedisService.CACHE_PREFIX_MEAL_LOGS,
+            RedisService.CACHE_PREFIX_WEIGHT_LOGS,
+        ]
+        deleted = 0
+        keys_to_delete = []
+        for p in prefixes:
+            pattern_prefix = f"{p}:{pet_id}:"
+            for k in redis._data:
+                if k.startswith(pattern_prefix):
+                    keys_to_delete.append(k)
+        for k in keys_to_delete:
+            del redis._data[k]
+            redis._expire.pop(k, None)
+            deleted += 1
+        return deleted
+
+    redis.get_log_cache = AsyncMock(side_effect=mock_get_log_cache)
+    redis.set_log_cache = AsyncMock(side_effect=mock_set_log_cache)
+    redis.invalidate_log_cache = AsyncMock(side_effect=mock_invalidate_log_cache)
+    redis._build_log_cache_key = MagicMock(side_effect=_build_key)
+    redis.CACHE_PREFIX_MEAL_LOGS = RedisService.CACHE_PREFIX_MEAL_LOGS
+    redis.CACHE_PREFIX_WEIGHT_LOGS = RedisService.CACHE_PREFIX_WEIGHT_LOGS
+    redis.CACHE_NULL_SENTINEL = RedisService.CACHE_NULL_SENTINEL
+    redis.CACHE_TTL_NORMAL = RedisService.CACHE_TTL_NORMAL
+    redis.CACHE_TTL_NULL = RedisService.CACHE_TTL_NULL
+
     return redis
