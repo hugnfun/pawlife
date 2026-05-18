@@ -345,6 +345,110 @@ class RedisService:
         key = f"session:{session_id}:history"
         return await self.delete(key)
 
+    # ========== 健康记录缓存 ==========
+
+    # 缓存键前缀常量
+    CACHE_PREFIX_MEAL_LOGS = "cache:meal_logs"
+    CACHE_PREFIX_WEIGHT_LOGS = "cache:weight_logs"
+    CACHE_NULL_SENTINEL = "__NULL__"  # 缓存穿透防护：空结果哨兵值
+    CACHE_TTL_NORMAL = 300  # 正常缓存 5 分钟
+    CACHE_TTL_NULL = 60  # 空结果缓存 1 分钟（防穿透）
+
+    def _build_log_cache_key(
+        self,
+        prefix: str,
+        pet_id: str,
+        **kwargs: Any,
+    ) -> str:
+        """构建日志缓存键。
+
+        Args:
+            prefix: 缓存键前缀
+            pet_id: 宠物ID
+            **kwargs: 额外参数（page, page_size, start_date, end_date 等）
+
+        Returns:
+            str: 缓存键
+        """
+        parts = [prefix, pet_id]
+        for k in sorted(kwargs.keys()):
+            v = kwargs[k]
+            if v is not None:
+                parts.append(f"{k}={v}")
+        return ":".join(parts)
+
+    async def get_log_cache(
+        self,
+        prefix: str,
+        pet_id: str,
+        **kwargs: Any,
+    ) -> Optional[Any]:
+        """获取日志缓存。
+
+        Args:
+            prefix: 缓存键前缀
+            pet_id: 宠物ID
+            **kwargs: 查询参数
+
+        Returns:
+            缓存数据，None 表示未命中，CACHE_NULL_SENTINEL 表示空结果缓存
+        """
+        key = self._build_log_cache_key(prefix, pet_id, **kwargs)
+        result = await self.get(key)
+        return result
+
+    async def set_log_cache(
+        self,
+        prefix: str,
+        pet_id: str,
+        data: Any,
+        **kwargs: Any,
+    ) -> bool:
+        """设置日志缓存。
+
+        如果 data 为 None 或空列表，写入空结果哨兵值（防缓存穿透）。
+
+        Args:
+            prefix: 缓存键前缀
+            pet_id: 宠物ID
+            data: 要缓存的数据
+            **kwargs: 查询参数
+
+        Returns:
+            bool: 是否设置成功
+        """
+        key = self._build_log_cache_key(prefix, pet_id, **kwargs)
+        if data is None or (isinstance(data, dict) and data.get("total", 1) == 0):
+            # 空结果缓存：短 TTL 防止穿透
+            return await self.set(key, self.CACHE_NULL_SENTINEL, expire=self.CACHE_TTL_NULL)
+        return await self.set(key, data, expire=self.CACHE_TTL_NORMAL)
+
+    async def invalidate_log_cache(self, pet_id: str, prefix: Optional[str] = None) -> int:
+        """失效指定宠物的日志缓存。
+
+        当写入或删除记录时调用，确保数据一致性。
+        使用 SCAN 命令批量清理匹配的缓存键，避免阻塞。
+
+        Args:
+            pet_id: 宠物ID
+            prefix: 可选，指定失效的缓存前缀。为 None 则失效所有日志类型缓存。
+
+        Returns:
+            int: 删除的缓存键数量
+        """
+        prefixes = [prefix] if prefix else [
+            self.CACHE_PREFIX_MEAL_LOGS,
+            self.CACHE_PREFIX_WEIGHT_LOGS,
+        ]
+        deleted = 0
+        async with self.get_client() as client:
+            for p in prefixes:
+                pattern = f"{p}:{pet_id}:*"
+                async for key in client.scan_iter(match=pattern, count=100):
+                    await client.delete(key)
+                    deleted += 1
+        return deleted
+
     # 健康检查
     async def health_check(self) -> bool:
         """Redis 健康检查。

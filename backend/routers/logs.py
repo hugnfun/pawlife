@@ -103,6 +103,14 @@ async def create_meal_log(
         await db.commit()
         await db.refresh(meal_log)
 
+        # 失效该宠物的饮食记录缓存，保证数据一致性
+        try:
+            await redis_service.invalidate_log_cache(
+                str(meal_data.pet_id), prefix=RedisService.CACHE_PREFIX_MEAL_LOGS
+            )
+        except Exception:
+            logger.warning("饮食记录缓存失效失败", exc_info=True)
+
         logger.info(f"记录饮食: pet_id={meal_data.pet_id}, food={meal_data.food_name}")
 
         return MealLogResponse.model_validate(meal_log)
@@ -131,9 +139,13 @@ async def list_meal_logs(
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
     db: AsyncSession = Depends(get_db),
+    redis_service: RedisService = Depends(get_redis),
     current_user: User = Depends(get_current_user),
 ) -> LogListResponse:
-    """获取饮食记录列表接口。
+    """获取饮食记录列表接口（带 Redis 缓存）。
+
+    Cache-Aside 模式：先查缓存，命中则直接返回；未命中则查 DB 并回填缓存。
+    空结果使用短 TTL 哨兵值防止缓存穿透。
 
     Args:
         pet_id: 宠物ID
@@ -142,6 +154,7 @@ async def list_meal_logs(
         page: 页码
         page_size: 每页数量
         db: 数据库会话
+        redis_service: Redis 服务
         current_user: 当前登录用户
 
     Returns:
@@ -164,7 +177,29 @@ async def list_meal_logs(
                 detail="宠物不存在或无权访问"
             )
 
-        # 构建查询条件
+        # --- 缓存查询 ---
+        cache_kwargs = dict(
+            page=page, page_size=page_size,
+            start_date=str(start_date) if start_date else None,
+            end_date=str(end_date) if end_date else None,
+        )
+        try:
+            cached = await redis_service.get_log_cache(
+                RedisService.CACHE_PREFIX_MEAL_LOGS, str(pet_id), **cache_kwargs,
+            )
+            if cached is not None:
+                # 命中空结果哨兵 -> 返回空列表
+                if cached == RedisService.CACHE_NULL_SENTINEL:
+                    logger.debug(f"缓存命中(空结果): meal_logs pet_id={pet_id}")
+                    return LogListResponse(total=0, items=[])
+                # 命中正常缓存
+                logger.debug(f"缓存命中: meal_logs pet_id={pet_id}")
+                return LogListResponse(**cached)
+        except Exception:
+            # Redis 异常不阻塞业务，降级查 DB
+            logger.warning("Redis 缓存读取失败，降级查 DB", exc_info=True)
+
+        # --- DB 查询（缓存未命中） ---
         conditions = [MealLog.pet_id == pet_id]
         if start_date:
             conditions.append(MealLog.meal_time >= start_date)
@@ -188,10 +223,24 @@ async def list_meal_logs(
         result = await db.execute(stmt)
         logs = result.scalars().all()
 
-        return LogListResponse(
+        response = LogListResponse(
             total=total,
             items=[MealLogResponse.model_validate(log) for log in logs]
         )
+
+        # --- 回填缓存 ---
+        try:
+            cache_data = {
+                "total": response.total,
+                "items": [item.model_dump(mode="json") for item in response.items],
+            }
+            await redis_service.set_log_cache(
+                RedisService.CACHE_PREFIX_MEAL_LOGS, str(pet_id), cache_data, **cache_kwargs,
+            )
+        except Exception:
+            logger.warning("Redis 缓存回填失败", exc_info=True)
+
+        return response
 
     except HTTPException:
         raise
@@ -285,6 +334,7 @@ async def create_activity_log(
 async def create_weight_log(
     weight_data: WeightLogCreate,
     db: AsyncSession = Depends(get_db),
+    redis_service: RedisService = Depends(get_redis),
     current_user: User = Depends(get_current_user),
 ) -> WeightLogResponse:
     """创建体重记录接口。
@@ -332,6 +382,14 @@ async def create_weight_log(
         pet.current_weight = weight_data.weight
         await db.commit()
 
+        # 失效该宠物的体重记录缓存，保证数据一致性
+        try:
+            await redis_service.invalidate_log_cache(
+                str(weight_data.pet_id), prefix=RedisService.CACHE_PREFIX_WEIGHT_LOGS
+            )
+        except Exception:
+            logger.warning("体重记录缓存失效失败", exc_info=True)
+
         logger.info(f"记录体重: pet_id={weight_data.pet_id}, weight={weight_data.weight}")
 
         return WeightLogResponse.model_validate(weight_log)
@@ -357,14 +415,18 @@ async def list_weight_logs(
     pet_id: UUID = Query(..., description="宠物ID"),
     limit: int = Query(30, ge=1, le=100, description="返回记录数量"),
     db: AsyncSession = Depends(get_db),
+    redis_service: RedisService = Depends(get_redis),
     current_user: User = Depends(get_current_user),
 ) -> LogListResponse:
-    """获取体重记录列表接口。
+    """获取体重记录列表接口（带 Redis 缓存）。
+
+    Cache-Aside 模式：先查缓存，命中则直接返回；未命中则查 DB 并回填缓存。
 
     Args:
         pet_id: 宠物ID
         limit: 返回记录数量
         db: 数据库会话
+        redis_service: Redis 服务
         current_user: 当前登录用户
 
     Returns:
@@ -387,7 +449,22 @@ async def list_weight_logs(
                 detail="宠物不存在或无权访问"
             )
 
-        # 查询体重记录
+        # --- 缓存查询 ---
+        cache_kwargs = dict(limit=limit)
+        try:
+            cached = await redis_service.get_log_cache(
+                RedisService.CACHE_PREFIX_WEIGHT_LOGS, str(pet_id), **cache_kwargs,
+            )
+            if cached is not None:
+                if cached == RedisService.CACHE_NULL_SENTINEL:
+                    logger.debug(f"缓存命中(空结果): weight_logs pet_id={pet_id}")
+                    return LogListResponse(total=0, items=[])
+                logger.debug(f"缓存命中: weight_logs pet_id={pet_id}")
+                return LogListResponse(**cached)
+        except Exception:
+            logger.warning("Redis 缓存读取失败，降级查 DB", exc_info=True)
+
+        # --- DB 查询（缓存未命中） ---
         stmt = (
             select(WeightLog)
             .where(WeightLog.pet_id == pet_id)
@@ -397,10 +474,24 @@ async def list_weight_logs(
         result = await db.execute(stmt)
         logs = result.scalars().all()
 
-        return LogListResponse(
+        response = LogListResponse(
             total=len(logs),
             items=[WeightLogResponse.model_validate(log) for log in logs]
         )
+
+        # --- 回填缓存 ---
+        try:
+            cache_data = {
+                "total": response.total,
+                "items": [item.model_dump(mode="json") for item in response.items],
+            }
+            await redis_service.set_log_cache(
+                RedisService.CACHE_PREFIX_WEIGHT_LOGS, str(pet_id), cache_data, **cache_kwargs,
+            )
+        except Exception:
+            logger.warning("Redis 缓存回填失败", exc_info=True)
+
+        return response
 
     except HTTPException:
         raise
