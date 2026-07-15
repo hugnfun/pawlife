@@ -1,71 +1,6 @@
 // ============================================
-// PawLife Design System - 温暖可爱风
+// PawLife Design System - 样式类
 // ============================================
-
-// --- 色彩体系 ---
-// 主色：珊瑚橙，温暖、活力、宠物感
-$primary-color: #FF8C69;
-$primary-color-light: #FFF0EB;
-$primary-color-lighter: #FFF7F4;
-$primary-color-dark: #E8775A;
-
-// 辅助色
-$secondary-color: #7EC8E3; // 天蓝 - 信息提示
-$success-color: #95D5B2;    // 薄荷绿 - 更柔和
-$success-color-light: #EDF9F2;
-$warning-color: #FFD166;    // 暖黄 - 更可爱
-$warning-color-light: #FFF8E6;
-$error-color: #EF6461;      // 柔红 - 不刺眼
-$error-color-light: #FDECEB;
-
-// 中性色
-$text-primary: #2D2D2D;
-$text-regular: #595959;
-$text-secondary: #8C8C8C;
-$text-placeholder: #C0C0C0;
-$text-disabled: #D9D9D9;
-
-$border-color: #ECECEC;
-$divider-color: #F0F0F0;
-
-// 背景
-$bg-page: #FAF7F5;         // 暖灰页面背景
-$bg-card: #FFFFFF;
-$bg-input: #FAFAF8;        // 输入框背景 - 偏暖
-$bg-hover: #F5F0ED;        // hover 背景
-
-// --- 圆角体系 ---
-$radius-xs: 6px;
-$radius-sm: 10px;
-$radius-md: 14px;
-$radius-lg: 20px;
-$radius-xl: 28px;
-$radius-full: 50%;
-
-// --- 阴影体系 ---
-$shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
-$shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.05);
-$shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
-$shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
-
-// --- 字体阶梯 ---
-$font-size-xs: 11px;
-$font-size-sm: 12px;
-$font-size-base: 14px;
-$font-size-md: 15px;
-$font-size-lg: 16px;
-$font-size-xl: 17px;
-$font-size-xxl: 20px;
-$font-size-display: 28px;
-
-// --- 间距阶梯 ---
-$spacing-xs: 4px;
-$spacing-sm: 8px;
-$spacing-md: 12px;
-$spacing-lg: 16px;
-$spacing-xl: 20px;
-$spacing-xxl: 24px;
-$spacing-xxxl: 32px;
 
 // ============================================
 // 重置样式
@@ -81,6 +16,63 @@ page {
     'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
   color: $text-primary;
   font-size: $font-size-base;
+}
+
+// ============================================
+// uni-app H5 全局修正
+// ============================================
+// 修复 uni-input 在 H5 下宽度异常的问题
+// uni-app H5 渲染结构: <uni-input> > <div.uni-input-wrapper> > <input.uni-input-input>
+uni-input {
+  display: block !important;
+  width: 100% !important;
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  position: relative;
+
+  .uni-input-wrapper {
+    display: flex !important;
+    width: 100% !important;
+    height: 100%;
+    min-width: 0 !important;
+    flex: 1 1 0 !important;
+    position: relative;
+  }
+
+  .uni-input-input {
+    flex: 1 1 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 100% !important;
+    box-sizing: border-box !important;
+    border: none !important;
+    outline: none !important;
+    background: transparent !important;
+    font-size: $font-size-base !important;
+    font-family: inherit !important;
+    color: $text-primary !important;
+    line-height: 1.5 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+  }
+
+  .uni-input-placeholder {
+    pointer-events: none;
+    color: $text-placeholder;
+  }
+}
+
+// 直接选择 input 标签（uni-app 编译后 input 可能用于不同 host）
+.input-wrapper input,
+.input-wrapper uni-input {
+  flex: 1 1 0 !important;
+  width: 100% !important;
+  min-width: 0 !important;
 }
 
 // ============================================
