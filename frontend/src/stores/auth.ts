@@ -70,6 +70,32 @@ export const useAuthStore = defineStore(
       }
     }
 
+    // #ifdef H5
+    // H5 环境登录（调用后端 dev-login 端点拿到真实 JWT）
+    async function mockLogin() {
+      const { post } = await import('@/api/index')
+      const res: any = await post('/v1/auth/dev-login', {})
+
+      const token = res?.token?.access_token
+      const refreshTok = res?.token?.refresh_token
+      const userData = res?.data
+
+      if (!token || !userData) {
+        throw new Error('开发登录失败：后端未返回有效 token')
+      }
+
+      accessToken.value = token
+      refreshToken.value = refreshTok || ''
+      userInfo.value = userData
+
+      uni.setStorageSync('access_token', token)
+      uni.setStorageSync('refresh_token', refreshTok || '')
+      uni.setStorageSync('user_info', JSON.stringify(userData))
+
+      return res
+    }
+    // #endif
+
     return {
       userInfo,
       accessToken,
@@ -79,6 +105,9 @@ export const useAuthStore = defineStore(
       logout,
       restoreFromStorage,
       updateUserInfo,
+      // #ifdef H5
+      mockLogin,
+      // #endif
     }
   }
 )

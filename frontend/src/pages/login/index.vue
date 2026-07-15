@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
- * 微信小程序登录页面
- * 调用 uni.login() 获取 code，发送到后端换取 token
+ * 登录页面
+ * 微信小程序：调用 uni.login() 获取 code
+ * H5：模拟登录（开发调试用）
  */
 import { ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
@@ -14,7 +15,17 @@ async function handleLogin() {
   logging.value = true
 
   try {
-    // 1. 获取微信登录 code
+    // #ifdef H5
+    // H5 环境：模拟登录（开发调试用）
+    await authStore.mockLogin()
+    uni.showToast({ title: '登录成功', icon: 'success' })
+    setTimeout(() => {
+      uni.switchTab({ url: '/pages/chat/index' })
+    }, 500)
+    // #endif
+
+    // #ifndef H5
+    // 微信小程序：获取微信登录 code
     const loginRes = await new Promise<UniApp.LoginRes>((resolve, reject) => {
       uni.login({
         provider: 'weixin',
@@ -29,7 +40,7 @@ async function handleLogin() {
       return
     }
 
-    // 2. 获取用户信息（昵称+头像）
+    // 获取用户信息（昵称+头像）
     let nickname: string | undefined
     let avatarUrl: string | undefined
     try {
@@ -46,15 +57,16 @@ async function handleLogin() {
       // getUserInfo 可能被用户拒绝，不影响登录
     }
 
-    // 3. 发送到后端换取 token
+    // 发送到后端换取 token
     await authStore.loginByWechat(code, nickname, avatarUrl)
 
     uni.showToast({ title: '登录成功', icon: 'success' })
 
-    // 4. 跳转到首页
+    // 跳转到首页
     setTimeout(() => {
       uni.switchTab({ url: '/pages/chat/index' })
     }, 500)
+    // #endif
   } catch (error: any) {
     console.error('登录失败:', error)
     const msg = error?.message || '登录失败，请重试'

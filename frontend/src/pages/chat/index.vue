@@ -21,6 +21,35 @@ const petStore = usePetStore()
 const inputText = ref('')
 const isInputDisabled = computed(() => chatStore.isLoading || !authStore.isLoggedIn)
 
+// 等待回复动画：. .. ... 循环（loading 或 streaming 都触发）
+const typingDotsText = ref('.')
+let typingDotsTimer: number | null = null
+
+function startTypingAnimation() {
+  if (typingDotsTimer) return
+  let count = 0
+  typingDotsTimer = setInterval(() => {
+    count = (count + 1) % 3
+    typingDotsText.value = '.'.repeat(count + 1)
+  }, 400) as unknown as number
+}
+
+function stopTypingAnimation() {
+  if (typingDotsTimer) {
+    clearInterval(typingDotsTimer)
+    typingDotsTimer = null
+  }
+  typingDotsText.value = '.'
+}
+
+watch(
+  () => chatStore.isLoading || chatStore.isStreaming,
+  (active) => {
+    if (active) startTypingAnimation()
+    else stopTypingAnimation()
+  },
+)
+
 // 录音状态
 const isRecording = ref(false)
 const recordingDuration = ref(0)
@@ -324,6 +353,32 @@ onMounted(async () => {
   }
 
   scrollToBottom()
+
+  // #ifdef H5
+  // 修复 uni-input 在 H5 下内部 input 元素宽度异常的问题
+  setTimeout(() => {
+    let isFixing = false
+    const fixInputWidth = () => {
+      if (isFixing) return
+      isFixing = true
+      document.querySelectorAll('uni-input').forEach((el) => {
+        const wrapper = el.querySelector('.uni-input-wrapper') as HTMLElement | null
+        const input = el.querySelector('input.uni-input-input') as HTMLInputElement | null
+        if (wrapper && wrapper.style.width !== '100%') {
+          wrapper.style.cssText += 'width:100%!important;flex:1 1 0!important;min-width:0!important;'
+        }
+        if (input && input.style.width !== '100%') {
+          input.style.cssText += 'width:100%!important;flex:1 1 0!important;min-width:0!important;box-sizing:border-box!important;font-size:14px!important;line-height:1.5!important;color:#2D2D2D!important;height:32px!important;'
+        }
+      })
+      isFixing = false
+    }
+    fixInputWidth()
+    // 仅监听新节点插入，避免 style 变化引起的无限循环
+    const observer = new MutationObserver(fixInputWidth)
+    observer.observe(document.body, { childList: true, subtree: true })
+  }, 100)
+  // #endif
 })
 
 watch(() => chatStore.messages.length, () => {
@@ -332,6 +387,10 @@ watch(() => chatStore.messages.length, () => {
 
 onUnmounted(() => {
   audioRecorder.destroy()
+  if (typingDotsTimer) {
+    clearInterval(typingDotsTimer)
+    typingDotsTimer = null
+  }
 })
 </script>
 
@@ -371,16 +430,16 @@ onUnmounted(() => {
         <view v-if="chatStore.isStreaming" class="message-item message-assistant">
           <view class="message-bubble">
             <mp-html :content="chatStore.streamingContent" class="message-content" />
-            <text class="cursor">▊</text>
+            <text class="streaming-dots">{{ typingDotsText }}</text>
           </view>
         </view>
 
         <!-- 加载占位 -->
+        <!-- 加载中（仅在非流式模式下显示） -->
         <view v-if="chatStore.isLoading && !chatStore.isStreaming" class="message-item message-assistant">
           <view class="message-bubble typing">
-            <text class="typing-dot">.</text>
-            <text class="typing-dot">.</text>
-            <text class="typing-dot">.</text>
+            <text class="typing-text">思考中</text>
+            <text class="typing-dots">{{ typingDotsText }}</text>
           </view>
         </view>
       </view>
@@ -405,6 +464,7 @@ onUnmounted(() => {
           @confirm="sendMessage"
           :disabled="isInputDisabled"
         />
+        <!-- #ifndef H5 -->
         <view class="input-actions">
           <button class="action-btn" @click="takePhoto" :disabled="isInputDisabled || uploadingFile">
             📷
@@ -423,6 +483,7 @@ onUnmounted(() => {
           <text class="recording-time">{{ formatDuration(recordingDuration) }}</text>
           <text class="recording-hint">点击停止</text>
         </view>
+        <!-- #endif -->
       </view>
       <button
         class="send-btn"
@@ -431,9 +492,11 @@ onUnmounted(() => {
       >
         发送
       </button>
+      <!-- #ifndef H5 -->
       <button class="clear-btn" @click="clearChat" title="清空对话">
         🗑️
       </button>
+      <!-- #endif -->
     </view>
   </view>
 </template>
@@ -441,9 +504,11 @@ onUnmounted(() => {
 <style lang="scss" scoped>
 .chat-page {
   height: 100%;
+  width: 100%;
   display: flex;
   flex-direction: column;
   background-color: $bg-page;
+  box-sizing: border-box;
 }
 
 .message-list {
@@ -553,19 +618,32 @@ onUnmounted(() => {
 
 .typing {
   padding: 12px 20px;
-  .typing-dot {
-    display: inline-block;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background-color: $primary-color;
-    margin: 0 3px;
-    opacity: 0.6;
-    animation: typing 1.4s infinite ease-in-out both;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 
-    &:nth-child(1) { animation-delay: -0.32s; }
-    &:nth-child(2) { animation-delay: -0.16s; }
+  .typing-text {
+    color: $primary-color;
+    font-size: $font-size-base;
   }
+
+  .typing-dots {
+    display: inline-block;
+    color: $primary-color;
+    font-size: $font-size-base;
+    width: 24px;
+    text-align: left;
+    font-weight: bold;
+  }
+}
+
+.streaming-dots {
+  display: inline-block;
+  color: $primary-color;
+  font-size: $font-size-base;
+  font-weight: bold;
+  margin-left: 4px;
+  vertical-align: baseline;
 }
 
 .suggestions {
@@ -629,13 +707,16 @@ onUnmounted(() => {
 .input-area {
   display: flex;
   align-items: center;
+  width: 100%;
+  box-sizing: border-box;
   padding: $spacing-md;
   background-color: white;
   border-top: 1px solid $border-color;
   gap: $spacing-sm;
 
   .input-wrapper {
-    flex: 1;
+    flex: 1 1 0;
+    width: 100%;
     display: flex;
     align-items: center;
     background-color: $bg-page;
@@ -643,16 +724,27 @@ onUnmounted(() => {
     padding: 4px 8px;
     border: 1px solid $border-color;
     transition: border-color 0.2s;
+    min-width: 0;
+    box-sizing: border-box;
 
     &:focus-within {
       border-color: $primary-color;
     }
 
     .text-input {
-      flex: 1;
+      flex: 1 1 0;
+      width: 100%;
+      min-width: 0;
       padding: 8px 12px;
       font-size: $font-size-base;
       background-color: transparent;
+      box-sizing: border-box;
+      /* uni-app H5: 强制 input 内部元素填满 */
+      :deep(.uni-input-input),
+      :deep(input) {
+        width: 100% !important;
+        min-width: 0 !important;
+      }
     }
 
     .input-actions {

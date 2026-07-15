@@ -45,19 +45,33 @@ async function loadData() {
   loading.value = true
   try {
     // 加载家庭列表
-    const families = await getMyFamilies()
-    myFamilies.value = families
-    if (families.length > 0) {
-      currentFamilyId.value = families[0].id
+    try {
+      const families = await getMyFamilies()
+      myFamilies.value = families
+      if (families.length > 0) {
+        currentFamilyId.value = families[0].id
+      }
+    } catch (e) {
+      console.warn('加载家庭列表失败:', e)
+      myFamilies.value = []
     }
 
     // 加载家庭成员
-    const members = await getFamilyMembers()
-    familyMembers.value = members
+    try {
+      const members = await getFamilyMembers()
+      familyMembers.value = members
+    } catch (e) {
+      console.warn('加载家庭成员失败:', e)
+      familyMembers.value = []
+    }
 
     // 加载推送设置
-    const settings = await getPushSettings()
-    pushSettings.value = { ...pushSettings.value, ...settings }
+    try {
+      const settings = await getPushSettings()
+      pushSettings.value = { ...pushSettings.value, ...settings }
+    } catch (e) {
+      console.warn('加载推送设置失败:', e)
+    }
   } catch (error) {
     console.error('加载数据失败:', error)
     // 静默失败，不阻塞页面
