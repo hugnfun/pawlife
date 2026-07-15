@@ -145,8 +145,12 @@ async def run_agent_streaming(
                             yield part.get("text", "")
 
         # 流式结束后获取最终状态
-        if kind == "on_chain_end" and event["tags"] and any("LangGraph" in tag for tag in event["tags"]):
-            final_state = event["data"]["output"]
+        # 注意：不同版本的 LangGraph tags 标识不同，宽松匹配根节点
+        if kind == "on_chain_end":
+            output = event.get("data", {}).get("output")
+            # 顶层 chain end 的 output 是完整的 AgentState (含 response_content)
+            if isinstance(output, dict) and "response_content" in output:
+                final_state = output
 
     # 处理情况：如果节点已经预先生成了完整回复（onboarding 引导步骤）
     # 我们需要把这个回复输出，因为它没有经过 LLM 流式

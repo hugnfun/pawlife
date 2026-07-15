@@ -351,3 +351,76 @@ async def _get_wechat_session(code: str, client: httpx.AsyncClient) -> dict:
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="网络连接微信服务失败，请检查网络"
         )
+
+
+@router.post(
+    "/dev-login",
+    response_model=WechatLoginResponse,
+    summary="开发环境登录（H5 调试用）",
+    description="仅在 DEBUG 模式下可用：创建/获取测试用户并返回真实 JWT。"
+)
+async def dev_login(
+    db: AsyncSession = Depends(get_db),
+) -> WechatLoginResponse:
+    """开发环境快速登录接口（H5 调试用）。
+
+    仅在 settings.debug=True 时启用；返回真实 JWT，可用于调用全部 API。
+    """
+    if not settings.debug:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="dev-login 仅在 DEBUG 模式下可用",
+        )
+
+    from sqlalchemy import select
+
+    # 查找或创建测试用户
+    dev_openid = "dev_h5_user_001"
+    result = await db.execute(select(User).where(User.wechat_openid == dev_openid))
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        user = User(
+            wechat_openid=dev_openid,
+            nickname="H5开发者",
+            avatar_url="https://api.dicebear.com/7.x/avataaars/svg?seed=dev",
+            role=UserRole.USER,
+            is_active=True,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+    user.last_login_at = datetime.utcnow()
+    await db.commit()
+
+    # 生成 JWT
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = create_access_token(
+        subject=user.id,
+        extra_claims={"role": user.role.value, "nickname": user.nickname or ""},
+        expires_delta=access_token_expires,
+    )
+    refresh_token = create_refresh_token(subject=user.id)
+
+    return WechatLoginResponse(
+        success=True,
+        message="开发登录成功",
+        data=UserProfile(
+            id=user.id,
+            wechat_openid=user.wechat_openid,
+            nickname=user.nickname,
+            avatar_url=user.avatar_url,
+            phone_number=user.phone_number,
+            role=user.role,
+            is_active=user.is_active,
+            last_login_at=user.last_login_at,
+        ),
+        token=TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type="bearer",
+            expires_in=int(settings.access_token_expire_minutes * 60),
+            session_id=f"dev_session_{user.id}",
+        ),
+    )

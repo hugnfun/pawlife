@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     host: str = "0.0.0.0"
     port: int = 8000
-    cors_origins: List[str] = ["http://localhost:5173", "http://localhost:8080"]
+    cors_origins: List[str] = ["http://localhost:5173", "http://localhost:8080", "http://localhost:3000"]
     api_prefix: str = "/api/v1"
 
     # 数据库配置 (PostgreSQL)
@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     azure_openai_endpoint: Optional[str] = None
     azure_openai_key: Optional[str] = None
     azure_openai_deployment: Optional[str] = None
+
+    # DeepSeek 配置（OpenAI 兼容）
+    deepseek_api_key: Optional[str] = None
+    deepseek_base_url: str = "https://api.deepseek.com/v1"
+    deepseek_model: str = "deepseek-chat"
 
     # 腾讯云配置
     tencent_secret_id: Optional[str] = None
