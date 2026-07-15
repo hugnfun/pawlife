@@ -50,9 +50,12 @@ class TestTranscribeVoiceTool:
         tool = TranscribeVoiceTool()
 
         mock_tencent_asr = AsyncMock(return_value="今天给猫咪喂了猫粮")
-        with patch.object(tool, "_tencent_asr", mock_tencent_asr):
-            result = await tool._arun(audio_url="https://example.com/voice.m4a")
-            assert "猫粮" in result or result is not None
+        with patch.object(tool, "_transcribe_tencent_asr", mock_tencent_asr):
+            with patch("core.config.settings") as mock_settings:
+                mock_settings.tencent_secret_id = "fake-id"
+                mock_settings.tencent_secret_key = "fake-key"
+                result = await tool._arun(voice_url="https://example.com/voice.m4a")
+                assert result is not None
 
     @pytest.mark.asyncio
     async def test_transcribe_voice_whisper_fallback(self):
@@ -61,13 +64,15 @@ class TestTranscribeVoiceTool:
 
         tool = TranscribeVoiceTool()
 
-        # 腾讯云 ASR 失败，降级到 Whisper
-        mock_tencent_asr = AsyncMock(side_effect=Exception("腾讯云 ASR 失败"))
-        mock_whisper = AsyncMock(return_value="喂了狗粮")
+        # 未配置腾讯云 ASR，降级到 Whisper
+        mock_whisper = AsyncMock(return_value={"success": True, "data": "喂了狗粮"})
 
-        with patch.object(tool, "_tencent_asr", mock_tencent_asr):
-            with patch.object(tool, "_whisper_asr", mock_whisper):
-                result = await tool._arun(audio_url="https://example.com/voice.m4a")
+        with patch.object(tool, "_transcribe_whisper", mock_whisper):
+            with patch("core.config.settings") as mock_settings:
+                mock_settings.tencent_secret_id = None
+                mock_settings.tencent_secret_key = None
+                mock_settings.openai_api_key = "fake-openai-key"
+                result = await tool._arun(voice_url="https://example.com/voice.m4a")
                 assert result is not None
 
 
@@ -96,8 +101,7 @@ class TestLogActivityTool:
         result = await tool._arun(
             pet_id="test-pet-id",
             activity_type="walk",
-            duration="30",
-            intensity="moderate",
+            duration_minutes=30,
         )
         assert result is not None
 
@@ -113,8 +117,7 @@ class TestLogWeightTool:
         tool = LogWeightTool()
         result = await tool._arun(
             pet_id="test-pet-id",
-            weight="5.2",
-            unit="kg",
+            weight_kg=5.2,
         )
         assert result is not None
 
@@ -130,6 +133,6 @@ class TestGenerateRecipeTool:
         tool = GenerateRecipeTool()
         result = await tool._arun(
             pet_id="test-pet-id",
-            goal="weight_loss",
+            goals=["weight_loss"],
         )
         assert result is not None
