@@ -209,17 +209,42 @@ INTENT_CLASSIFICATION_PROMPT = """
 
 def get_llm() -> BaseChatModel:
     """
-    获取 LLM 实例（Claude 3.5 Sonnet）。
+    获取 LLM 实例。
 
-    使用 anthropic Python SDK 通过 langchain_anthropic 接入。
+    优先级：Anthropic Claude > DeepSeek > OpenAI GPT-4o-mini
+    通过环境变量配置对应的 API 密钥。
     """
-    from langchain_anthropic import ChatAnthropic
+    if settings.anthropic_api_key:
+        from langchain_anthropic import ChatAnthropic
+        return ChatAnthropic(
+            model="claude-3-5-sonnet-20241022",
+            temperature=0.7,
+            api_key=settings.anthropic_api_key,
+            streaming=True,
+        )
 
-    return ChatAnthropic(
-        model="claude-3-5-sonnet-20241022",
-        temperature=0.7,
-        api_key=settings.anthropic_api_key,
-        streaming=True,
+    if settings.deepseek_api_key:
+        # DeepSeek 通过 OpenAI 兼容接口接入
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(
+            model=settings.deepseek_model,
+            temperature=0.7,
+            api_key=settings.deepseek_api_key,
+            base_url=settings.deepseek_base_url,
+            streaming=True,
+        )
+
+    if settings.openai_api_key:
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(
+            model="gpt-4o-mini",
+            temperature=0.7,
+            api_key=settings.openai_api_key,
+            streaming=True,
+        )
+
+    raise RuntimeError(
+        "未配置 LLM API 密钥。请在 .env 中设置 DEEPSEEK_API_KEY、ANTHROPIC_API_KEY 或 OPENAI_API_KEY"
     )
 
 
