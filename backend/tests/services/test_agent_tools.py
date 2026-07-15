@@ -21,7 +21,7 @@ class TestEvaluateDietTool:
             {"food_name": "chicken", "amount_grams": 100, "protein": 25, "fat": 5}
         ]
 
-        with patch("services.agent.tools.db") as mock_db:
+        with patch("services.database.db") as mock_db:
             mock_session = AsyncMock()
             mock_result = MagicMock()
             mock_result.scalar_one_or_none.return_value = MagicMock(
@@ -60,7 +60,7 @@ class TestScheduleReminderTool:
 
         tool = ScheduleReminderTool()
 
-        with patch("services.agent.tools.db") as mock_db:
+        with patch("services.database.db") as mock_db:
             mock_session = AsyncMock()
             mock_session.commit = AsyncMock()
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
@@ -86,7 +86,7 @@ class TestWebSearchTool:
 
         tool = WebSearchTool()
 
-        with patch("services.agent.tools.settings") as mock_settings:
+        with patch("core.config.settings") as mock_settings:
             mock_settings.bing_search_api_key = None
             result = await tool._arun(query="金毛犬日常护理建议")
 
@@ -103,7 +103,7 @@ class TestLogMealTool:
 
         tool = LogMealTool()
 
-        with patch("services.agent.tools.db") as mock_db:
+        with patch("services.database.db") as mock_db:
             mock_session = AsyncMock()
             mock_session.commit = AsyncMock()
             mock_session.flush = AsyncMock()
@@ -116,13 +116,12 @@ class TestLogMealTool:
             mock_session.__aexit__ = AsyncMock(return_value=False)
             mock_db.get_session.return_value = mock_session
 
-            with patch("services.agent.tools.redis_service") as mock_redis:
+            with patch("services.redis.redis_service") as mock_redis:
                 mock_redis.check_duplicate_feeding = AsyncMock(return_value=False)
                 result = await tool._arun(
                     pet_id="00000000-0000-0000-0000-000000000001",
                     food_name="狗粮",
-                    amount_grams=200,
-                    food_type="main",
+                    amount=200.0,
                 )
 
         assert result is not None
