@@ -1,8 +1,9 @@
 import { defineConfig } from 'vite'
-import uni from '@dcloudio/vite-plugin-uni'
+import uniPlugin from '@dcloudio/vite-plugin-uni'
 
+// @ts-ignore
 export default defineConfig({
-  plugins: [uni.default()],
+  plugins: [uniPlugin.default()],
   server: {
     port: 3000,
     proxy: {
@@ -16,7 +17,7 @@ export default defineConfig({
     preprocessorOptions: {
       scss: {
         // 全局自动注入 SCSS 变量和工具样式，所有 .vue 文件无需手动 import
-        additionalData: `@import "@/styles/index.scss";`,
+        additionalData: `@use "@/styles/variables.scss" as *;`,
       },
     },
   },
