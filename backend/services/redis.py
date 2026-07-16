@@ -350,9 +350,12 @@ class RedisService:
     # 缓存键前缀常量
     CACHE_PREFIX_MEAL_LOGS = "cache:meal_logs"
     CACHE_PREFIX_WEIGHT_LOGS = "cache:weight_logs"
+    CACHE_PREFIX_ACTIVITY_LOGS = "cache:activity_logs"
+    CACHE_PREFIX_PET_PERMISSION = "cache:pet_perm"  # 宠物权限校验短期缓存
     CACHE_NULL_SENTINEL = "__NULL__"  # 缓存穿透防护：空结果哨兵值
     CACHE_TTL_NORMAL = 300  # 正常缓存 5 分钟
     CACHE_TTL_NULL = 60  # 空结果缓存 1 分钟（防穿透）
+    CACHE_TTL_PERMISSION = 30  # 权限校验缓存 30 秒（平衡安全与性能）
 
     def _build_log_cache_key(
         self,
@@ -431,7 +434,8 @@ class RedisService:
 
         Args:
             pet_id: 宠物ID
-            prefix: 可选，指定失效的缓存前缀。为 None 则失效所有日志类型缓存。
+            prefix: 可选，指定失效的缓存前缀。为 None 则失效所有日志类型缓存
+                    （meal / weight / activity）。
 
         Returns:
             int: 删除的缓存键数量
@@ -439,6 +443,7 @@ class RedisService:
         prefixes = [prefix] if prefix else [
             self.CACHE_PREFIX_MEAL_LOGS,
             self.CACHE_PREFIX_WEIGHT_LOGS,
+            self.CACHE_PREFIX_ACTIVITY_LOGS,
         ]
         deleted = 0
         async with self.get_client() as client:
@@ -447,6 +452,58 @@ class RedisService:
                 async for key in client.scan_iter(match=pattern, count=100):
                     await client.delete(key)
                     deleted += 1
+        return deleted
+
+    async def get_pet_permission_cached(
+        self,
+        pet_id: str,
+        user_id: str,
+    ) -> Optional[bool]:
+        """获取宠物权限校验缓存（Round 2 新增）。
+
+        用于减少每次读取健康记录时对 `SELECT Pet WHERE id=? AND owner_id=?`
+        的重复查询。缓存粒度：pet_id + user_id，TTL 30s，只缓存"有权访问"的
+        正向结果；无权访问不缓存，避免权限变更后延迟生效。
+
+        Args:
+            pet_id: 宠物ID
+            user_id: 用户ID
+
+        Returns:
+            True 表示缓存命中且有权访问；None 表示缓存未命中，需要走 DB 校验。
+        """
+        key = f"{self.CACHE_PREFIX_PET_PERMISSION}:{pet_id}:{user_id}"
+        result = await self.get(key)
+        return True if result == "1" else None
+
+    async def set_pet_permission_cached(
+        self,
+        pet_id: str,
+        user_id: str,
+    ) -> bool:
+        """写入宠物权限校验缓存（仅缓存有权访问的正向结果）。
+
+        Args:
+            pet_id: 宠物ID
+            user_id: 用户ID
+
+        Returns:
+            是否设置成功
+        """
+        key = f"{self.CACHE_PREFIX_PET_PERMISSION}:{pet_id}:{user_id}"
+        return await self.set(key, "1", expire=self.CACHE_TTL_PERMISSION)
+
+    async def invalidate_pet_permission_cached(self, pet_id: str) -> int:
+        """失效指定宠物的所有权限缓存。
+
+        场景：宠物 owner 变更、宠物被删除等。
+        """
+        pattern = f"{self.CACHE_PREFIX_PET_PERMISSION}:{pet_id}:*"
+        deleted = 0
+        async with self.get_client() as client:
+            async for key in client.scan_iter(match=pattern, count=100):
+                await client.delete(key)
+                deleted += 1
         return deleted
 
     # 健康检查

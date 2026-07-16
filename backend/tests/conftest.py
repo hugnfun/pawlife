@@ -126,12 +126,19 @@ async def test_app(test_engine):
     mock_redis.set_log_cache = AsyncMock(return_value=True)
     mock_redis.invalidate_log_cache = AsyncMock(return_value=0)
     mock_redis._build_log_cache_key = MagicMock(return_value="cache:test:key")
+    # Round 2：宠物权限校验缓存（默认未命中，走 DB）
+    mock_redis.get_pet_permission_cached = AsyncMock(return_value=None)
+    mock_redis.set_pet_permission_cached = AsyncMock(return_value=True)
+    mock_redis.invalidate_pet_permission_cached = AsyncMock(return_value=0)
     # 缓存常量
     mock_redis.CACHE_PREFIX_MEAL_LOGS = "cache:meal_logs"
     mock_redis.CACHE_PREFIX_WEIGHT_LOGS = "cache:weight_logs"
+    mock_redis.CACHE_PREFIX_ACTIVITY_LOGS = "cache:activity_logs"
+    mock_redis.CACHE_PREFIX_PET_PERMISSION = "cache:pet_perm"
     mock_redis.CACHE_NULL_SENTINEL = "__NULL__"
     mock_redis.CACHE_TTL_NORMAL = 300
     mock_redis.CACHE_TTL_NULL = 60
+    mock_redis.CACHE_TTL_PERMISSION = 30
 
     async def override_get_redis():
         return mock_redis
