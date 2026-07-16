@@ -11,6 +11,7 @@ Round 2 改造要点：
 """
 
 import logging
+import time
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
@@ -42,7 +43,66 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/logs", tags=["日志记录"])
 
 
+# ==================== 缓存打点（Round 2 后续：最小可观测性） ====================
+#
+# 设计目标：不引入 prometheus/otel 等重型依赖，只用 Python logging 的
+# structured extra 字段，让日志聚合平台（腾讯云 CLS）可以按字段做统计。
+#
+# 事件命名统一为 cache.{action}，方便 CLS 查询 event:"cache.hit" 等。
+
+def log_cache_event(
+    action: str,
+    prefix: str,
+    pet_id: str,
+    *,
+    detail: Optional[str] = None,
+    duration_ms: Optional[float] = None,
+) -> None:
+    """记录一次缓存事件（结构化日志）。
+
+    Args:
+        action: hit / miss / null_hit / set / invalidate / error
+        prefix: 缓存键前缀（如 cache:meal_logs）
+        pet_id: 宠物ID
+        detail: 附加信息（如失效的 key 数量、错误类型）
+        duration_ms: 事件耗时（毫秒），仅命中/set 场景填写
+    """
+    payload = {
+        "event": f"cache.{action}",
+        "prefix": prefix,
+        "pet_id": pet_id,
+    }
+    if detail is not None:
+        payload["detail"] = detail
+    if duration_ms is not None:
+        payload["duration_ms"] = round(duration_ms, 3)
+    # 用 info 级别，方便默认日志级别下也能被采集
+    logger.info(f"cache.{action}", extra=payload)
+
+
 # ==================== 辅助函数 ====================
+
+async def _safe_invalidate_log_cache(
+    redis_service: RedisService,
+    pet_id: str,
+    prefix: str,
+) -> None:
+    """写/删场景下的缓存失效通用调用，带打点与异常隔离。
+
+    失败不阻塞业务，只记录 cache.error / cache.invalidate 事件。
+    """
+    try:
+        t0 = time.perf_counter()
+        deleted = await redis_service.invalidate_log_cache(pet_id, prefix=prefix)
+        log_cache_event(
+            "invalidate", prefix, pet_id,
+            detail=f"keys={deleted}",
+            duration_ms=(time.perf_counter() - t0) * 1000,
+        )
+    except Exception:
+        log_cache_event("error", prefix, pet_id, detail="invalidate_failed")
+        logger.warning("缓存失效失败", exc_info=True)
+
 
 async def check_pet_permission_cached(
     pet_id: UUID,
@@ -155,12 +215,9 @@ async def create_meal_log(
         await db.refresh(meal_log)
 
         # 失效该宠物的饮食记录缓存，保证数据一致性
-        try:
-            await redis_service.invalidate_log_cache(
-                str(meal_data.pet_id), prefix=RedisService.CACHE_PREFIX_MEAL_LOGS
-            )
-        except Exception:
-            logger.warning("饮食记录缓存失效失败", exc_info=True)
+        await _safe_invalidate_log_cache(
+            redis_service, str(meal_data.pet_id), RedisService.CACHE_PREFIX_MEAL_LOGS
+        )
 
         logger.info(f"记录饮食: pet_id={meal_data.pet_id}, food={meal_data.food_name}")
 
@@ -209,17 +266,22 @@ async def list_meal_logs(
             start_date=str(start_date) if start_date else None,
             end_date=str(end_date) if end_date else None,
         )
+        cache_prefix = RedisService.CACHE_PREFIX_MEAL_LOGS
         try:
+            t0 = time.perf_counter()
             cached = await redis_service.get_log_cache(
-                RedisService.CACHE_PREFIX_MEAL_LOGS, str(pet_id), **cache_kwargs,
+                cache_prefix, str(pet_id), **cache_kwargs,
             )
+            elapsed_ms = (time.perf_counter() - t0) * 1000
             if cached is not None:
                 if cached == RedisService.CACHE_NULL_SENTINEL:
-                    logger.debug(f"缓存命中(空结果): meal_logs pet_id={pet_id}")
+                    log_cache_event("null_hit", cache_prefix, str(pet_id), duration_ms=elapsed_ms)
                     return LogListResponse(total=0, items=[])
-                logger.debug(f"缓存命中: meal_logs pet_id={pet_id}")
+                log_cache_event("hit", cache_prefix, str(pet_id), duration_ms=elapsed_ms)
                 return LogListResponse(**cached)
+            log_cache_event("miss", cache_prefix, str(pet_id), duration_ms=elapsed_ms)
         except Exception:
+            log_cache_event("error", cache_prefix, str(pet_id), detail="get_failed")
             logger.warning("Redis 缓存读取失败，降级查 DB", exc_info=True)
 
         # --- DB 查询（缓存未命中） ---
@@ -256,10 +318,17 @@ async def list_meal_logs(
                 "total": response.total,
                 "items": [item.model_dump(mode="json") for item in response.items],
             }
+            t0 = time.perf_counter()
             await redis_service.set_log_cache(
-                RedisService.CACHE_PREFIX_MEAL_LOGS, str(pet_id), cache_data, **cache_kwargs,
+                cache_prefix, str(pet_id), cache_data, **cache_kwargs,
+            )
+            log_cache_event(
+                "set", cache_prefix, str(pet_id),
+                detail=f"total={response.total}",
+                duration_ms=(time.perf_counter() - t0) * 1000,
             )
         except Exception:
+            log_cache_event("error", cache_prefix, str(pet_id), detail="set_failed")
             logger.warning("Redis 缓存回填失败", exc_info=True)
 
         return response
@@ -306,12 +375,9 @@ async def delete_meal_log(
         await db.delete(meal_log)
         await db.commit()
 
-        try:
-            await redis_service.invalidate_log_cache(
-                str(pet_id), prefix=RedisService.CACHE_PREFIX_MEAL_LOGS
-            )
-        except Exception:
-            logger.warning("饮食记录缓存失效失败", exc_info=True)
+        await _safe_invalidate_log_cache(
+            redis_service, str(pet_id), RedisService.CACHE_PREFIX_MEAL_LOGS
+        )
 
         logger.info(f"删除饮食记录: id={log_id} pet_id={pet_id}")
     except HTTPException:
@@ -356,12 +422,9 @@ async def create_activity_log(
         await db.refresh(activity_log)
 
         # Round 2：失效该宠物的活动记录缓存
-        try:
-            await redis_service.invalidate_log_cache(
-                str(activity_data.pet_id), prefix=RedisService.CACHE_PREFIX_ACTIVITY_LOGS
-            )
-        except Exception:
-            logger.warning("活动记录缓存失效失败", exc_info=True)
+        await _safe_invalidate_log_cache(
+            redis_service, str(activity_data.pet_id), RedisService.CACHE_PREFIX_ACTIVITY_LOGS
+        )
 
         logger.info(f"记录活动: pet_id={activity_data.pet_id}, type={activity_data.activity_type}")
 
@@ -406,17 +469,22 @@ async def list_activity_logs(
             start_date=str(start_date) if start_date else None,
             end_date=str(end_date) if end_date else None,
         )
+        cache_prefix = RedisService.CACHE_PREFIX_ACTIVITY_LOGS
         try:
+            t0 = time.perf_counter()
             cached = await redis_service.get_log_cache(
-                RedisService.CACHE_PREFIX_ACTIVITY_LOGS, str(pet_id), **cache_kwargs,
+                cache_prefix, str(pet_id), **cache_kwargs,
             )
+            elapsed_ms = (time.perf_counter() - t0) * 1000
             if cached is not None:
                 if cached == RedisService.CACHE_NULL_SENTINEL:
-                    logger.debug(f"缓存命中(空结果): activity_logs pet_id={pet_id}")
+                    log_cache_event("null_hit", cache_prefix, str(pet_id), duration_ms=elapsed_ms)
                     return LogListResponse(total=0, items=[])
-                logger.debug(f"缓存命中: activity_logs pet_id={pet_id}")
+                log_cache_event("hit", cache_prefix, str(pet_id), duration_ms=elapsed_ms)
                 return LogListResponse(**cached)
+            log_cache_event("miss", cache_prefix, str(pet_id), duration_ms=elapsed_ms)
         except Exception:
+            log_cache_event("error", cache_prefix, str(pet_id), detail="get_failed")
             logger.warning("Redis 缓存读取失败，降级查 DB", exc_info=True)
 
         # --- DB 查询（缓存未命中） ---
@@ -451,10 +519,17 @@ async def list_activity_logs(
                 "total": response.total,
                 "items": [item.model_dump(mode="json") for item in response.items],
             }
+            t0 = time.perf_counter()
             await redis_service.set_log_cache(
-                RedisService.CACHE_PREFIX_ACTIVITY_LOGS, str(pet_id), cache_data, **cache_kwargs,
+                cache_prefix, str(pet_id), cache_data, **cache_kwargs,
+            )
+            log_cache_event(
+                "set", cache_prefix, str(pet_id),
+                detail=f"total={response.total}",
+                duration_ms=(time.perf_counter() - t0) * 1000,
             )
         except Exception:
+            log_cache_event("error", cache_prefix, str(pet_id), detail="set_failed")
             logger.warning("Redis 缓存回填失败", exc_info=True)
 
         return response
@@ -500,12 +575,9 @@ async def delete_activity_log(
         await db.delete(activity_log)
         await db.commit()
 
-        try:
-            await redis_service.invalidate_log_cache(
-                str(pet_id), prefix=RedisService.CACHE_PREFIX_ACTIVITY_LOGS
-            )
-        except Exception:
-            logger.warning("活动记录缓存失效失败", exc_info=True)
+        await _safe_invalidate_log_cache(
+            redis_service, str(pet_id), RedisService.CACHE_PREFIX_ACTIVITY_LOGS
+        )
 
         logger.info(f"删除活动记录: id={log_id} pet_id={pet_id}")
     except HTTPException:
@@ -554,12 +626,9 @@ async def create_weight_log(
         await db.commit()
 
         # 失效该宠物的体重记录缓存
-        try:
-            await redis_service.invalidate_log_cache(
-                str(weight_data.pet_id), prefix=RedisService.CACHE_PREFIX_WEIGHT_LOGS
-            )
-        except Exception:
-            logger.warning("体重记录缓存失效失败", exc_info=True)
+        await _safe_invalidate_log_cache(
+            redis_service, str(weight_data.pet_id), RedisService.CACHE_PREFIX_WEIGHT_LOGS
+        )
 
         logger.info(f"记录体重: pet_id={weight_data.pet_id}, weight={weight_data.weight}")
 
@@ -596,17 +665,22 @@ async def list_weight_logs(
         )
 
         cache_kwargs = dict(limit=limit)
+        cache_prefix = RedisService.CACHE_PREFIX_WEIGHT_LOGS
         try:
+            t0 = time.perf_counter()
             cached = await redis_service.get_log_cache(
-                RedisService.CACHE_PREFIX_WEIGHT_LOGS, str(pet_id), **cache_kwargs,
+                cache_prefix, str(pet_id), **cache_kwargs,
             )
+            elapsed_ms = (time.perf_counter() - t0) * 1000
             if cached is not None:
                 if cached == RedisService.CACHE_NULL_SENTINEL:
-                    logger.debug(f"缓存命中(空结果): weight_logs pet_id={pet_id}")
+                    log_cache_event("null_hit", cache_prefix, str(pet_id), duration_ms=elapsed_ms)
                     return LogListResponse(total=0, items=[])
-                logger.debug(f"缓存命中: weight_logs pet_id={pet_id}")
+                log_cache_event("hit", cache_prefix, str(pet_id), duration_ms=elapsed_ms)
                 return LogListResponse(**cached)
+            log_cache_event("miss", cache_prefix, str(pet_id), duration_ms=elapsed_ms)
         except Exception:
+            log_cache_event("error", cache_prefix, str(pet_id), detail="get_failed")
             logger.warning("Redis 缓存读取失败，降级查 DB", exc_info=True)
 
         # Round 2：COUNT 与分页解耦，避免 len(all()) 全表加载
@@ -632,10 +706,17 @@ async def list_weight_logs(
                 "total": response.total,
                 "items": [item.model_dump(mode="json") for item in response.items],
             }
+            t0 = time.perf_counter()
             await redis_service.set_log_cache(
-                RedisService.CACHE_PREFIX_WEIGHT_LOGS, str(pet_id), cache_data, **cache_kwargs,
+                cache_prefix, str(pet_id), cache_data, **cache_kwargs,
+            )
+            log_cache_event(
+                "set", cache_prefix, str(pet_id),
+                detail=f"total={response.total}",
+                duration_ms=(time.perf_counter() - t0) * 1000,
             )
         except Exception:
+            log_cache_event("error", cache_prefix, str(pet_id), detail="set_failed")
             logger.warning("Redis 缓存回填失败", exc_info=True)
 
         return response
@@ -681,12 +762,9 @@ async def delete_weight_log(
         await db.delete(weight_log)
         await db.commit()
 
-        try:
-            await redis_service.invalidate_log_cache(
-                str(pet_id), prefix=RedisService.CACHE_PREFIX_WEIGHT_LOGS
-            )
-        except Exception:
-            logger.warning("体重记录缓存失效失败", exc_info=True)
+        await _safe_invalidate_log_cache(
+            redis_service, str(pet_id), RedisService.CACHE_PREFIX_WEIGHT_LOGS
+        )
 
         logger.info(f"删除体重记录: id={log_id} pet_id={pet_id}")
     except HTTPException:
