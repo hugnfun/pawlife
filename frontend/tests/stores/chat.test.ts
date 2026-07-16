@@ -1,6 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useChatStore } from '@/stores/chat'
+
+// mock uni 全局对象（uni-app SDK 未在 vitest 环境注入）
+;(globalThis as any).uni = {
+  setStorageSync: vi.fn(),
+  getStorageSync: vi.fn(() => ''),
+  removeStorageSync: vi.fn(),
+}
 
 describe('Chat Store', () => {
   beforeEach(() => {
