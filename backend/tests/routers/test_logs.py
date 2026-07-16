@@ -560,3 +560,56 @@ async def test_pet_permission_denied_when_not_owner(async_client: AsyncClient, a
             params={"pet_id": "00000000-0000-0000-0000-000000000000"},
         )
         assert resp.status_code == 404
+
+
+# ==================== Round 2 后续：缓存打点（最小可观测性） ====================
+
+@pytest.mark.asyncio
+async def test_cache_metrics_emit_miss_and_set(
+    async_client: AsyncClient, sample_pet, auth_headers, caplog,
+):
+    """🔑 首次查询应打点 cache.miss 与 cache.set 两个事件。"""
+    import logging as _logging
+    caplog.set_level(_logging.INFO, logger="routers.logs")
+
+    resp = await async_client.get(
+        "/api/v1/logs/meals",
+        headers=auth_headers,
+        params={"pet_id": str(sample_pet.id)},
+    )
+    assert resp.status_code == 200
+
+    events = [rec.__dict__.get("event") for rec in caplog.records if rec.__dict__.get("event")]
+    # 首次请求：应至少产生 cache.miss + cache.set（回填哨兵值或数据）
+    assert "cache.miss" in events
+    assert "cache.set" in events
+
+
+@pytest.mark.asyncio
+async def test_cache_metrics_emit_invalidate_on_delete(
+    async_client: AsyncClient, sample_pet, auth_headers, caplog,
+):
+    """🔑 删除记录应打点 cache.invalidate 事件。"""
+    import logging as _logging
+    caplog.set_level(_logging.INFO, logger="routers.logs")
+
+    # 先创建一条
+    create_resp = await async_client.post(
+        "/api/v1/logs/meals",
+        headers=auth_headers,
+        json={
+            "pet_id": str(sample_pet.id),
+            "food_name": "待删除",
+            "food_type": "main",
+            "amount": "5.00",
+            "unit": "g",
+            "meal_time": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    log_id = create_resp.json()["id"]
+
+    caplog.clear()
+    await async_client.delete(f"/api/v1/logs/meals/{log_id}", headers=auth_headers)
+
+    events = [rec.__dict__.get("event") for rec in caplog.records if rec.__dict__.get("event")]
+    assert "cache.invalidate" in events
