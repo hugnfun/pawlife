@@ -232,8 +232,9 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False, comment='创建时间'),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False, comment='更新时间'),
     )
-    # 将 embedding 列类型改为 vector
-    op.execute('ALTER TABLE pet_memories ALTER COLUMN embedding TYPE vector(1536)')
+
+    # 将 embedding 列类型改为 vector（USING 显式转换空表以避免 DatatypeMismatch）
+    op.execute('ALTER TABLE pet_memories ALTER COLUMN embedding TYPE vector(1536) USING embedding::vector(1536)')
 
     # 营养数据库表
     op.create_table(
