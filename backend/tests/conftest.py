@@ -130,6 +130,22 @@ async def test_app(test_engine):
     mock_redis.get_pet_permission_cached = AsyncMock(return_value=None)
     mock_redis.set_pet_permission_cached = AsyncMock(return_value=True)
     mock_redis.invalidate_pet_permission_cached = AsyncMock(return_value=0)
+    # Round 3：日志草稿（双通道输入 §2）—— 用内存字典模拟 Redis，让集成测试可以走完 confirm 路径
+    _draft_store: dict = {}
+
+    async def _save_draft(draft_id, data):
+        _draft_store[draft_id] = data
+        return True
+
+    async def _get_draft(draft_id):
+        return _draft_store.get(draft_id)
+
+    async def _delete_draft(draft_id):
+        return 1 if _draft_store.pop(draft_id, None) is not None else 0
+
+    mock_redis.save_log_draft = AsyncMock(side_effect=_save_draft)
+    mock_redis.get_log_draft = AsyncMock(side_effect=_get_draft)
+    mock_redis.delete_log_draft = AsyncMock(side_effect=_delete_draft)
     # 缓存常量
     mock_redis.CACHE_PREFIX_MEAL_LOGS = "cache:meal_logs"
     mock_redis.CACHE_PREFIX_WEIGHT_LOGS = "cache:weight_logs"
@@ -139,6 +155,9 @@ async def test_app(test_engine):
     mock_redis.CACHE_TTL_NORMAL = 300
     mock_redis.CACHE_TTL_NULL = 60
     mock_redis.CACHE_TTL_PERMISSION = 30
+    # Round 3：日志草稿常量
+    mock_redis.LOG_DRAFT_PREFIX = "cache:log_draft"
+    mock_redis.LOG_DRAFT_TTL = 900
 
     async def override_get_redis():
         return mock_redis
