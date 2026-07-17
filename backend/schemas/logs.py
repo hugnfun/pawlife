@@ -113,3 +113,40 @@ class LogListResponse(BaseModel):
 
     total: int = Field(..., description="总数量")
     items: List = Field(..., description="日志列表")
+
+
+# ==================== 双通道输入：草稿确认（requirements-v1.1.md §2） ====================
+
+class PendingLogConfirmation(BaseModel):
+    """AI 提取的待确认日志草稿。
+
+    由 Agent 工具在提取到结构化数据后返回，携带 draft_id 便于用户点击
+    确认或修改后确认。
+    """
+
+    draft_id: UUID = Field(..., description="草稿唯一 ID，用于后续 confirm/cancel")
+    log_type: str = Field(..., description="日志类型：meal / weight / activity")
+    pet_id: UUID = Field(..., description="宠物 ID")
+    payload: dict = Field(..., description="AI 提取的字段（可被用户覆盖）")
+    summary: str = Field(..., description="面向用户的自然语言摘要，用于卡片展示")
+    ttl_seconds: int = Field(default=900, description="过期秒数（默认 15 min）")
+
+
+class LogConfirmRequest(BaseModel):
+    """用户点击「确认」或「修改后确认」时的请求体。
+
+    payload_override 允许用户在前端卡片里修改字段（如把 50g 改成 40g），
+    覆盖 AI 原始提取。None 表示按 AI 原始 payload 直接落库。
+    """
+
+    payload_override: Optional[dict] = Field(
+        None, description="用户修改后的字段覆盖；为空则用 draft 原始 payload"
+    )
+
+
+class LogConfirmResponse(BaseModel):
+    """确认成功后的响应。"""
+
+    log_type: str = Field(..., description="落库的日志类型")
+    log_id: UUID = Field(..., description="真实写入 DB 的记录 ID")
+    was_edited: bool = Field(..., description="是否被用户编辑过（相对 AI 原始 payload）")

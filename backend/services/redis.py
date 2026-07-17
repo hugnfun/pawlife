@@ -357,6 +357,10 @@ class RedisService:
     CACHE_TTL_NULL = 60  # 空结果缓存 1 分钟（防穿透）
     CACHE_TTL_PERMISSION = 30  # 权限校验缓存 30 秒（平衡安全与性能）
 
+    # ========== 日志草稿（双通道输入：AI 提取后待用户确认） ==========
+    LOG_DRAFT_PREFIX = "cache:log_draft"
+    LOG_DRAFT_TTL = 900  # 15 分钟，AI 提取的结构化数据待用户确认；超时自动废弃
+
     def _build_log_cache_key(
         self,
         prefix: str,
@@ -505,6 +509,42 @@ class RedisService:
                 await client.delete(key)
                 deleted += 1
         return deleted
+
+    # ========== 日志草稿方法（双通道输入 §2） ==========
+
+    async def save_log_draft(self, draft_id: str, data: Dict[str, Any]) -> bool:
+        """保存 AI 提取的日志草稿数据，等待用户确认。
+
+        Args:
+            draft_id: 草稿唯一 ID（由工具生成的 UUID）
+            data: 完整草稿字典（含 type/pet_id/user_id/payload/created_at）
+
+        Returns:
+            bool: 是否成功
+        """
+        key = f"{self.LOG_DRAFT_PREFIX}:{draft_id}"
+        return await self.set(key, data, expire=self.LOG_DRAFT_TTL)
+
+    async def get_log_draft(self, draft_id: str) -> Optional[Dict[str, Any]]:
+        """读取日志草稿。
+
+        Args:
+            draft_id: 草稿 ID
+
+        Returns:
+            草稿字典；None 表示不存在或已过期
+        """
+        key = f"{self.LOG_DRAFT_PREFIX}:{draft_id}"
+        return await self.get(key)
+
+    async def delete_log_draft(self, draft_id: str) -> int:
+        """删除日志草稿（用户确认或取消后调用）。
+
+        Returns:
+            删除的 key 数量（0 表示已过期或不存在）
+        """
+        key = f"{self.LOG_DRAFT_PREFIX}:{draft_id}"
+        return await self.delete(key)
 
     # 健康检查
     async def health_check(self) -> bool:
