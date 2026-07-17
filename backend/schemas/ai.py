@@ -2,7 +2,7 @@
 AI 对话相关的 Pydantic 模型。
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field

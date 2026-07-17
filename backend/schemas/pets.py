@@ -4,16 +4,16 @@
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional, List
+from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 from models.pet import (
-    PetSpecies,
-    PetGender,
-    NeuteredStatus,
     BodyConditionScore,
+    NeuteredStatus,
+    PetGender,
+    PetSpecies,
 )
 
 

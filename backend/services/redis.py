@@ -5,12 +5,12 @@ Redis 服务模块。
 """
 
 import json
-from typing import Any, Optional, Union, Dict, List
 from contextlib import asynccontextmanager
 from datetime import timedelta
+from typing import Any, Dict, List, Optional, Union
 
 import redis.asyncio as redis
-from redis.asyncio import Redis, ConnectionPool
+from redis.asyncio import ConnectionPool, Redis
 
 from core.config import settings
 

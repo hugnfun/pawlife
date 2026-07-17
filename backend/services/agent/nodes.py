@@ -9,17 +9,20 @@ LangGraph 工作流节点实现（最简版本）。
 """
 
 import logging
-from typing import List, Dict, Any, Optional
-from uuid import UUID
 from datetime import datetime, timedelta
-from sqlalchemy import select, func
-from langchain_core.messages import SystemMessage
+from typing import Any, Dict, List, Optional
+from uuid import UUID
+
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import SystemMessage
+from sqlalchemy import func, select
+
 from core.config import settings
+from models.log import ActivityLog, MealLog, WeightLog
 from models.pet import Pet
-from models.log import MealLog, WeightLog, ActivityLog
 from services.database import db
 from services.memory import memory_service
+
 from .state import AgentState, OnboardingStep
 
 logger = logging.getLogger(__name__)
@@ -368,8 +371,9 @@ async def handle_log_meal(state: AgentState) -> Dict[str, Any]:
         }
 
     try:
+        from langchain_core.messages import SystemMessage
+
         from .tools import TOOL_REGISTRY
-        from langchain_core.messages import SystemMessage, HumanMessage
 
         # 让 LLM 提取结构化食物信息（支持多个食物）
         llm = get_llm()
@@ -421,8 +425,9 @@ async def handle_log_meal(state: AgentState) -> Dict[str, Any]:
             logger.info(f"  - {food['food_name']}: {food['amount_g']}g")
 
         # 重复喂食检测（Redis 缓存）
-        from services.redis import redis_service
         import time
+
+        from services.redis import redis_service
         pet_id_str = str(pet_id)
         current_ts = int(time.time())
         is_duplicate = await redis_service.check_duplicate_feeding(pet_id_str, current_ts)
@@ -571,7 +576,7 @@ async def generate_response(state: AgentState) -> Dict[str, Any]:
         messages.append(SystemMessage(content="附加上下文信息:\n" + "\n".join(extra_context_parts)))
 
     # 添加对话历史
-    from langchain_core.messages import HumanMessage, AIMessage
+    from langchain_core.messages import AIMessage, HumanMessage
     for msg in state["messages"]:
         if msg.role == "user":
             messages.append(HumanMessage(content=msg.content))
@@ -652,6 +657,7 @@ async def check_onboarding_status(state: AgentState) -> Dict[str, Any]:
         更新后的状态
     """
     from sqlalchemy import select
+
     from models.pet import Pet
     from services.database import db
 
@@ -891,7 +897,9 @@ async def finalize_onboarding(state: AgentState) -> Dict[str, Any]:
 
         # 转换字段并更新
         from uuid import UUID
-        from models.pet import PetSpecies, PetGender, NeuteredStatus
+
+        from models.pet import NeuteredStatus, PetGender, PetSpecies
+
         from .tools import TOOL_REGISTRY
         update_tool = TOOL_REGISTRY["update_pet_profile"]
 
@@ -1058,8 +1066,9 @@ async def handle_update_pet_profile(state: AgentState) -> Dict[str, Any]:
         }
 
     try:
+        from langchain_core.messages import SystemMessage
+
         from .tools import TOOL_REGISTRY
-        from langchain_core.messages import SystemMessage, HumanMessage
 
         # 先让 LLM 提取要更新的字段和值
         llm = get_llm()
@@ -1209,7 +1218,9 @@ async def process_pending_confirmation(state: AgentState) -> Dict[str, Any]:
     confirm_words = ["是", "对", "是的", "确定", "确认", "要", "好", "y", "yes"]
     cancel_words = ["不", "不是", "不用", "取消", "算了", "n", "no"]
 
-    is_confirmed = any(word in user_input for word in confirm_words)
+    # 目前只对"取消"做严格匹配，其他非取消输入默认视为继续记录；
+    # 若未来需要严格双向确认，可启用下面的 is_confirmed 判断
+    _is_confirmed = any(word in user_input for word in confirm_words)  # noqa: F841 保留用于将来更严格的确认逻辑
     is_canceled = any(word in user_input for word in cancel_words)
 
     if is_canceled:
@@ -1253,9 +1264,11 @@ async def process_pending_confirmation(state: AgentState) -> Dict[str, Any]:
         }
 
     try:
-        from .tools import TOOL_REGISTRY
-        from services.redis import redis_service
         import time
+
+        from services.redis import redis_service
+
+        from .tools import TOOL_REGISTRY
 
         # 需要手动清除 Redis 标记，因为之前检测重复时已经标记了存在
         # 这里用户确认了，允许写入，所以清除标记让它可以写入
@@ -1337,7 +1350,6 @@ async def _extract_and_save_memory(state: AgentState, pet_id) -> None:
         state: 当前 Agent 状态
         pet_id: 宠物ID
     """
-    import asyncio
 
     try:
         tool_outputs = state.get("tool_outputs", [])

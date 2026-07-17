@@ -6,12 +6,17 @@
 
 import enum
 import uuid
-from typing import Optional, List
 from datetime import datetime
-from sqlalchemy import ForeignKey, Enum, Text, String
+from typing import TYPE_CHECKING, List, Optional
+
+from sqlalchemy import Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from .base import Base, UUIDMixin, TimeStampMixin
+from .base import Base, TimeStampMixin, UUIDMixin
+
+if TYPE_CHECKING:
+    from .log import MealLog
+    from .pet import Pet
 
 
 class UserRole(enum.Enum):

@@ -22,11 +22,13 @@ export function aiConversation(data: any): Promise<any> {
 
 // 获取 SSE 流式对话连接 URL - 使用真实 LangGraph Agent 路由
 export function getAIConversationStreamUrl(): string {
+  // 使用 let 声明，避免 uni-app 条件编译在 vue-tsc 下被视为重复的 const 声明
+  let baseUrl: string = ''
   // #ifdef H5
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
+  baseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
   // #endif
   // #ifdef MP-WEIXIN
-  const baseUrl = 'http://localhost:8000/api'
+  baseUrl = 'http://localhost:8000/api'
   // #endif
   return `${baseUrl}/v1/chat/stream`
 }

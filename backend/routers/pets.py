@@ -5,19 +5,18 @@
 """
 
 import logging
-from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
 
-from models.pet import Pet
-from models.user import User, UserRole
-from schemas.pets import PetCreate, PetUpdate, PetResponse, PetListResponse
-from services.database import get_db
-from services.redis import get_redis, RedisService
 from core.dependencies import get_current_user
+from models.pet import Pet
+from models.user import User
+from schemas.pets import PetCreate, PetListResponse, PetResponse, PetUpdate
+from services.database import get_db
+from services.redis import RedisService, get_redis
 
 # 配置日志
 logger = logging.getLogger(__name__)

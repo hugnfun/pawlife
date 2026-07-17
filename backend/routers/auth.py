@@ -5,25 +5,25 @@
 """
 
 import logging
-import httpx
-from typing import Optional
 from datetime import datetime, timedelta
+from typing import Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.user import User, UserRole
-from schemas.auth import (
-    WechatLoginRequest,
-    WechatLoginResponse,
-    UserProfile,
-    TokenResponse,
-)
-from services.database import get_db
-from services.redis import get_redis, RedisService
 from core.config import settings
 from core.security import create_access_token, create_refresh_token
+from models.user import User, UserRole
+from schemas.auth import (
+    TokenResponse,
+    UserProfile,
+    WechatLoginRequest,
+    WechatLoginResponse,
+)
+from services.database import get_db
+from services.redis import RedisService, get_redis
 
 # 配置日志
 logger = logging.getLogger(__name__)

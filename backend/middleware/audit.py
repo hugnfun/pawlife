@@ -141,7 +141,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         parts = path.strip("/").split("/")
         if len(parts) >= 4:
             # /api/v1/resource/id -> id
-            return parts[-1] if not parts[-1] in ("", "active") else None
+            return parts[-1] if parts[-1] not in ("", "active") else None
         return None
 
     @staticmethod

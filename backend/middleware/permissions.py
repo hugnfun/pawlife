@@ -6,9 +6,9 @@ RBAC 权限中间件。
 """
 
 import logging
-from typing import Dict, List, Optional, Set
+from typing import Dict, Optional, Set
 
-from fastapi import Request, HTTPException, status
+from fastapi import HTTPException, Request, status
 from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)

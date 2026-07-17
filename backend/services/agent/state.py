@@ -5,8 +5,9 @@ Agent 状态定义。
 遵循 LangGraph 最佳实践，使用 TypedDict 定义状态结构。
 """
 
-from typing import TypedDict, List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional, TypedDict
 from uuid import UUID
+
 from schemas.ai import AIMessage
 
 

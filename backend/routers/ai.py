@@ -6,16 +6,15 @@ AI 分析 API 路由。
 """
 
 import logging
-from typing import Optional
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
 
-from models.user import User
+from core.dependencies import get_current_user
 from models.log import MealLog
 from models.pet import Pet
+from models.user import User
 from schemas.ai import (
     AIHealthReportRequest,
     AIHealthReportResponse,
@@ -23,7 +22,6 @@ from schemas.ai import (
     AINutritionAnalysisResponse,
 )
 from services.database import get_db
-from core.dependencies import get_current_user
 
 # 配置日志
 logger = logging.getLogger(__name__)

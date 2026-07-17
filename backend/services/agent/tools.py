@@ -8,6 +8,7 @@ Agent 工具集合。
 import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID
+
 from langchain.tools import BaseTool
 from pydantic import BaseModel, Field
 
@@ -44,6 +45,7 @@ class GetPetProfileTool(BaseTool):
             操作结果，包含宠物档案数据
         """
         from sqlalchemy import select
+
         from models.pet import Pet
         from services.database import db
 
@@ -136,6 +138,7 @@ class UpdatePetProfileTool(BaseTool):
             操作结果
         """
         from sqlalchemy import select
+
         from models.pet import Pet
         from services.database import db
 
@@ -220,8 +223,8 @@ class CreatePetProfileTool(BaseTool):
             操作结果，包含新建宠物ID
         """
         import uuid
+
         from models.pet import Pet
-        from models.user import User
         from services.database import db
 
         try:
@@ -282,6 +285,7 @@ class SwitchActivePetTool(BaseTool):
             操作结果
         """
         from sqlalchemy import select
+
         from models.pet import Pet
         from services.database import db
         from services.redis import redis_service
@@ -374,9 +378,10 @@ class LogMealTool(BaseTool):
         Returns:
             操作结果，包含记录ID
         """
-        from datetime import datetime
         import uuid
+        from datetime import datetime
         from decimal import Decimal
+
         from models.log import MealLog
         from services.database import db
 
@@ -470,8 +475,9 @@ class LogActivityTool(BaseTool):
         Returns:
             操作结果，包含记录ID
         """
-        from datetime import datetime
         import uuid
+        from datetime import datetime
+
         from models.log import ActivityLog
         from services.database import db
 
@@ -560,9 +566,10 @@ class LogWeightTool(BaseTool):
         Returns:
             操作结果，包含记录ID
         """
-        from datetime import datetime
         import uuid
+        from datetime import datetime
         from decimal import Decimal
+
         from models.log import WeightLog
         from models.pet import Pet
         from services.database import db
@@ -650,8 +657,8 @@ class CalculateNutritionTool(BaseTool):
         Returns:
             计算结果，包含各种营养素
         """
-        from sqlalchemy import select
-        from sqlalchemy import or_
+        from sqlalchemy import or_, select
+
         from models.nutrition import FoodNutrition
         from services.database import db
 
@@ -744,6 +751,7 @@ class EvaluateDietTool(BaseTool):
             评估结果，包含达标/不达标项和建议
         """
         from sqlalchemy import select
+
         from models.pet import Pet
         from services.database import db
 
@@ -919,11 +927,13 @@ class GenerateRecipeTool(BaseTool):
         """
         import uuid
         from decimal import Decimal
+
         from sqlalchemy import select
-        from models.pet import Pet
-        from models.recipe import Recipe, RecipeIngredient, RecipeType, RecipeSource
-        from services.database import db
+
         from core.config import settings
+        from models.pet import Pet
+        from models.recipe import Recipe, RecipeIngredient, RecipeSource, RecipeType
+        from services.database import db
 
         try:
             # 1. 获取宠物信息
@@ -974,12 +984,6 @@ class GenerateRecipeTool(BaseTool):
 
             # 4. 用 LLM 生成食谱
             recipe_name = f"{pet_info.get('name', '宠物')}的{'、'.join(goals[:2]) if goals else '日常'}食谱"
-            recipe_data = {
-                "pet_info": pet_info,
-                "goals": goals,
-                "restrictions": restrictions or [],
-                "available_foods": safe_foods[:20],
-            }
 
             # 尝试调用 LLM 生成食谱内容
             recipe_content = None
@@ -1142,9 +1146,11 @@ class RecognizeFoodImageTool(BaseTool):
         Returns:
             识别结果，包含食物名称、估算分量、置信度
         """
-        import httpx
-        import json
         import base64
+        import json
+
+        import httpx
+
         from core.config import settings
 
         try:
@@ -1277,11 +1283,6 @@ class TranscribeVoiceTool(BaseTool):
         Returns:
             转写结果，包含识别出的文字
         """
-        import httpx
-        import json
-        import hashlib
-        import time
-        import base64
         from core.config import settings
 
         try:
@@ -1310,12 +1311,13 @@ class TranscribeVoiceTool(BaseTool):
     @staticmethod
     async def _transcribe_tencent_asr(voice_url: str) -> Dict[str, Any]:
         """使用腾讯云一句话识别 API。"""
-        import httpx
-        import json
-        import hashlib
-        import time
         import base64
+        import hashlib
         import hmac
+        import time
+
+        import httpx
+
         from core.config import settings
 
         # 下载音频文件
@@ -1337,7 +1339,7 @@ class TranscribeVoiceTool(BaseTool):
 
         # 排序参数并签名
         params_str = "&".join(f"{k}={params[k]}" for k in sorted(params))
-        sign_str = f"GETasr.cloud.tencent.com/asr/v2/?" + params_str
+        sign_str = "GETasr.cloud.tencent.com/asr/v2/?" + params_str
         secret_key_bytes = settings.tencent_secret_key.encode("utf-8")
         signature = hmac.new(secret_key_bytes, sign_str.encode("utf-8"), hashlib.sha1).digest()
         signature_b64 = base64.b64encode(signature).decode("utf-8")
@@ -1377,8 +1379,9 @@ class TranscribeVoiceTool(BaseTool):
     @staticmethod
     async def _transcribe_whisper(voice_url: str) -> Dict[str, Any]:
         """使用 OpenAI Whisper API 作为 fallback。"""
+
         import httpx
-        import json
+
         from core.config import settings
 
         # 下载音频文件
@@ -1443,6 +1446,7 @@ class SearchNearbyHospitalTool(BaseTool):
             搜索结果，包含医院列表
         """
         import httpx
+
         from core.config import settings
 
         try:
@@ -1473,8 +1477,6 @@ class SearchNearbyHospitalTool(BaseTool):
             }
 
             # 生成签名
-            import hashlib
-            from core.config import settings as cfg
 
             # 腾讯地图使用 key + sig 机制
             map_key = settings.tencent_map_key or settings.tencent_secret_id
@@ -1565,7 +1567,7 @@ class WebSearchTool(BaseTool):
             搜索结果列表
         """
         import httpx
-        from core.config import settings
+
 
         try:
             # 方案 1: 使用 OpenAI 的 search tool (如果可用)
@@ -1666,6 +1668,7 @@ class ScheduleReminderTool(BaseTool):
         """
         import uuid
         from datetime import datetime, timedelta
+
         from models.reminder import Reminder, ReminderType, RepeatType
         from services.database import db
 
@@ -1803,11 +1806,13 @@ class GenerateHealthReportTool(BaseTool):
             操作结果，包含健康报告
         """
         from datetime import datetime, timedelta
-        from sqlalchemy import select, func
-        from models.pet import Pet
-        from models.log import MealLog, ActivityLog, WeightLog
-        from services.database import db
+
+        from sqlalchemy import func, select
+
         from core.config import settings
+        from models.log import ActivityLog, MealLog, WeightLog
+        from models.pet import Pet
+        from services.database import db
 
         try:
             end_date = datetime.now()
@@ -1894,8 +1899,8 @@ class GenerateHealthReportTool(BaseTool):
                         llm = ChatAnthropic(model="claude-sonnet-4-20250514", anthropic_api_key=settings.anthropic_api_key)
 
                     if not llm and settings.openai_api_key:
-                        from langchain_openai import ChatOpenAI
                         from langchain_core.messages import HumanMessage
+                        from langchain_openai import ChatOpenAI
                         llm = ChatOpenAI(model="gpt-4o-mini", openai_api_key=settings.openai_api_key)
 
                     if llm:

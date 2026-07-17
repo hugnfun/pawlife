@@ -9,14 +9,14 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.user import User, FamilyMember, Family, FamilyRole
-from services.database import get_db
-from services.redis import get_redis, RedisService
 from core.dependencies import get_current_user
+from models.user import Family, FamilyMember, User
+from services.database import get_db
+from services.redis import RedisService, get_redis
 
 # 配置日志
 logger = logging.getLogger(__name__)

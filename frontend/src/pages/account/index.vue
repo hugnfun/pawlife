@@ -9,6 +9,8 @@ import { getFamilyMembers, getPushSettings, updatePushSettings } from '@/api/acc
 import { getMyFamilies, createFamily, joinFamily, getFamilyInviteInfo } from '@/api/family'
 import type { FamilyMember, PushSettings, Family } from '@/types/api'
 
+// 注：下方模板中 switch 的 @change 使用了 `$event as any`，
+// 因为 uni-app 的 switch change 事件类型未导出 detail.value 字段，vue-tsc 只能看到基础 Event。
 const authStore = useAuthStore()
 
 // 状态
@@ -285,35 +287,35 @@ onMounted(() => {
             <text class="setting-name">每日健康晨报</text>
             <text class="setting-desc">每天早上推送昨日健康总结</text>
           </view>
-          <switch :checked="pushSettings.daily_summary" @change="pushSettings.daily_summary = $event.detail.value" color="#FF8C69" />
+          <switch :checked="pushSettings.daily_summary" @change="pushSettings.daily_summary = ($event as any).detail.value" color="#FF8C69" />
         </view>
         <view class="setting-item">
           <view class="setting-info">
             <text class="setting-name">喂食提醒</text>
             <text class="setting-desc">到饭点提醒喂食</text>
           </view>
-          <switch :checked="pushSettings.feeding_reminder" @change="pushSettings.feeding_reminder = $event.detail.value" color="#FF8C69" />
+          <switch :checked="pushSettings.feeding_reminder" @change="pushSettings.feeding_reminder = ($event as any).detail.value" color="#FF8C69" />
         </view>
         <view class="setting-item">
           <view class="setting-info">
             <text class="setting-name">体重记录提醒</text>
             <text class="setting-desc">每周提醒称重</text>
           </view>
-          <switch :checked="pushSettings.weight_reminder" @change="pushSettings.weight_reminder = $event.detail.value" color="#FF8C69" />
+          <switch :checked="pushSettings.weight_reminder" @change="pushSettings.weight_reminder = ($event as any).detail.value" color="#FF8C69" />
         </view>
         <view class="setting-item">
           <view class="setting-info">
             <text class="setting-name">疫苗接种提醒</text>
             <text class="setting-desc">临近下次疫苗接种时提醒</text>
           </view>
-          <switch :checked="pushSettings.vaccine_reminder" @change="pushSettings.vaccine_reminder = $event.detail.value" color="#FF8C69" />
+          <switch :checked="pushSettings.vaccine_reminder" @change="pushSettings.vaccine_reminder = ($event as any).detail.value" color="#FF8C69" />
         </view>
         <view class="setting-item">
           <view class="setting-info">
             <text class="setting-name">健康异常预警</text>
             <text class="setting-desc">发现健康风险时及时通知</text>
           </view>
-          <switch :checked="pushSettings.health_alert" @change="pushSettings.health_alert = $event.detail.value" color="#FF8C69" />
+          <switch :checked="pushSettings.health_alert" @change="pushSettings.health_alert = ($event as any).detail.value" color="#FF8C69" />
         </view>
       </view>
       <button class="save-btn" @click="savePushSettings">保存设置</button>
