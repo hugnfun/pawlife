@@ -91,7 +91,8 @@ export class SSEClient {
       },
     })
 
-    requestTask.onChunkReceived((res) => {
+    // onChunkReceived 是微信小程序原生 API，uni-app 的 RequestTask 类型未涵盖，使用 any 断言
+    ;(requestTask as any).onChunkReceived((res: any) => {
       try {
         const text = this.arrayBufferToUtf8(res.data)
         this.parseSSEChunk(text, this.options)

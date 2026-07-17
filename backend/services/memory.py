@@ -5,11 +5,10 @@
 """
 
 import logging
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from models.memory import PetMemory
@@ -100,7 +99,9 @@ class MemoryService:
             创建结果
         """
         from uuid import uuid4
+
         from openai import AsyncOpenAI
+
         from models.memory import PetMemory
 
         if settings.openai_api_key is None:

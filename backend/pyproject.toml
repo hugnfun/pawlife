@@ -17,6 +17,11 @@ select = [
 ignore = [
     "E501",  # line too long (formatter handles)
     "E402",  # module level import not at top of file
+    # SQLAlchemy 惯用法：`Model.is_active == True` 会被翻译成 SQL WHERE 谓词，
+    # 直接用 `Model.is_active` 会返回 Column 对象而不是 SQL 表达式。
+    # 官方推荐可改为 `.is_(True)`，但项目内多达 16 处、语义一致，
+    # 且改动风险 > 价值，此处统一忽略。
+    "E712",  # true-false-comparison
 ]
 
 [tool.ruff.lint.per-file-ignores]

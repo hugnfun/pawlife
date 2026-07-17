@@ -12,10 +12,10 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import settings
+from core.security import get_user_id_from_token
 from models.user import User, UserRole
 from services.database import get_db
-from core.security import get_user_id_from_token
-from core.config import settings
 
 # 配置日志
 logger = logging.getLogger(__name__)

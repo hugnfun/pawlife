@@ -6,12 +6,17 @@
 
 import enum
 import uuid
-from typing import Optional
 from datetime import datetime, timedelta
-from sqlalchemy import ForeignKey, Enum, Text, String, DateTime
+from typing import TYPE_CHECKING, Optional
+
+from sqlalchemy import DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from .base import Base, UUIDMixin, TimeStampMixin
+from .base import Base, TimeStampMixin, UUIDMixin
+
+if TYPE_CHECKING:
+    from .pet import Pet
+    from .user import User
 
 
 class ReminderType(enum.Enum):

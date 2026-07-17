@@ -325,7 +325,8 @@ onMounted(async () => {
   // 从路由参数读取预填提示语和宠物 ID
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1]
-  const query = currentPage.options
+  // getCurrentPages()[i].options 是 uni-app 私有字段，官方类型未导出，使用 any 断言
+  const query = (currentPage as any).options
   if (query.prompt) {
     inputText.value = decodeURIComponent(query.prompt)
   }

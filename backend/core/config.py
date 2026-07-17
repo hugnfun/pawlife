@@ -5,8 +5,8 @@
 遵循 12-factor app 原则，将配置存储在环境变量中。
 """
 
-import os
-from typing import Optional, List
+from typing import List, Optional
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 

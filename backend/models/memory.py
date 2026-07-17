@@ -5,12 +5,16 @@
 """
 
 import uuid
-from datetime import datetime
-from sqlalchemy import ForeignKey, Text, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from pgvector.sqlalchemy import Vector
+from typing import TYPE_CHECKING
 
-from .base import Base, UUIDMixin, TimeStampMixin
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from .base import Base, TimeStampMixin, UUIDMixin
+
+if TYPE_CHECKING:
+    from .pet import Pet
 
 
 class PetMemory(Base, UUIDMixin, TimeStampMixin):

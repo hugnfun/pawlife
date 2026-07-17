@@ -13,26 +13,27 @@ LangGraph 工作流组装（包含新用户建档引导）。
               handle_log_meal → generate_response → END
 """
 
-from langgraph.graph import StateGraph, END
-from .state import AgentState
+from langgraph.graph import END, StateGraph
+
 from .nodes import (
+    check_onboarding_completed,
     check_onboarding_status,
     check_pending_confirmation,
-    should_process_pending,
-    process_pending_confirmation,
-    should_start_onboarding,
-    start_onboarding_prompt,
-    process_onboarding_step,
-    check_onboarding_completed,
-    finalize_onboarding,
     classify_intent,
-    route_by_intent,
-    handle_log_meal,
-    handle_get_pet_profile,
-    handle_update_pet_profile,
+    finalize_onboarding,
     generate_response,
     handle_error,
+    handle_get_pet_profile,
+    handle_log_meal,
+    handle_update_pet_profile,
+    process_onboarding_step,
+    process_pending_confirmation,
+    route_by_intent,
+    should_process_pending,
+    should_start_onboarding,
+    start_onboarding_prompt,
 )
+from .state import AgentState
 
 # 全局缓存编译好的图
 _agent_graph: StateGraph = None

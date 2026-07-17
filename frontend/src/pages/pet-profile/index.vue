@@ -20,7 +20,8 @@ const currentDiet = ref<DietRecipe | null>(null)
 // 当前宠物 ID 从路由获取
 const pages = getCurrentPages()
 const currentPage = pages[pages.length - 1]
-const query = currentPage.options
+// getCurrentPages()[i].options 是 uni-app 私有字段，官方类型未导出，使用 any 断言
+const query = (currentPage as any).options
 const petId = computed(() => query.pet_id || petStore.currentSelectedPet?.id || null)
 
 // 加载数据

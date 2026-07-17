@@ -5,17 +5,14 @@
 """
 
 import logging
-from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
+from core.config import settings
+from core.dependencies import get_current_user
 from models.user import User
 from services.cos import cos_service
-from services.database import get_db
-from core.dependencies import get_current_user
-from core.config import settings
-from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
