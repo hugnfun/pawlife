@@ -8,10 +8,9 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
-from sqlalchemy import DateTime, String, text
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, declared_attr
+from sqlalchemy import DateTime, text
 from sqlalchemy.dialects.postgresql import UUID
-
+from sqlalchemy.orm import DeclarativeBase, Mapped, declared_attr, mapped_column
 
 # 自定义类型注解
 str_255 = Annotated[str, 255]

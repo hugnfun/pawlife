@@ -7,7 +7,7 @@
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import Column, String, Text, DateTime, Index
+from sqlalchemy import Column, DateTime, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from .base import Base

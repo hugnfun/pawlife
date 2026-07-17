@@ -128,12 +128,14 @@ function onBirthdayChange(e: any) {
 
 // 物种选择
 function onSpeciesChange(e: any) {
-  form.value.species = speciesOptions[e.detail.value].value
+  // speciesOptions 中的 value 是宽字符串，需要断言回 form.species 的联合类型
+  form.value.species = speciesOptions[e.detail.value].value as typeof form.value.species
 }
 
 // 性别选择
 function onGenderChange(e: any) {
-  form.value.gender = genderOptions[e.detail.value].value
+  // genderOptions 中的 value 是宽字符串，需要断言回 form.gender 的联合类型
+  form.value.gender = genderOptions[e.detail.value].value as typeof form.value.gender
 }
 
 onLoad((query) => {

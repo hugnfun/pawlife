@@ -10,20 +10,20 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
 
 from core.config import settings
 from routers import (
-    auth_router,
-    pets_router,
-    pet_detail_router,
-    logs_router,
-    ai_router,
-    families_router,
-    chat_router,
     account_router,
+    ai_router,
+    auth_router,
+    chat_router,
+    families_router,
+    logs_router,
+    pet_detail_router,
+    pets_router,
     upload_router,
 )
 from services.database import db

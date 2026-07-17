@@ -6,14 +6,13 @@
     alembic -c backend/alembic.ini upgrade head
 """
 
-import asyncio
 import os
 import sys
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import pool
-from sqlalchemy.ext.asyncio import async_engine_from_config
+
+from alembic import context
 
 # 确保 backend 目录在 Python 路径中
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -38,17 +37,6 @@ config.set_main_option('sqlalchemy.url', sync_url)
 
 # 导入所有模型，确保 Base.metadata 包含所有表定义
 from models.base import Base
-from models import (
-    User, Family, FamilyMember, UserRole, FamilyRole,
-    Pet, PetSpecies, PetGender, NeuteredStatus, BodyConditionScore,
-    VaccineRecord, DewormingRecord,
-    MealLog, ActivityLog, WeightLog,
-    Reminder, ReminderType, RepeatType, ReminderStatus,
-    Recipe, RecipeIngredient, RecipeType, RecipeSource,
-    PetMemory,
-    FoodNutrition,
-    AuditLog,
-)
 
 # 目标元数据
 target_metadata = Base.metadata

@@ -6,13 +6,18 @@
 
 import enum
 import uuid
-from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
-from sqlalchemy import ForeignKey, Numeric, Text, Enum, String
+from typing import TYPE_CHECKING, Optional
+
+from sqlalchemy import Enum, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from .base import Base, UUIDMixin, TimeStampMixin
+from .base import Base, TimeStampMixin, UUIDMixin
+
+if TYPE_CHECKING:
+    from .pet import Pet
+    from .user import User
 
 
 class MealLog(Base, UUIDMixin, TimeStampMixin):

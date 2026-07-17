@@ -5,12 +5,13 @@
 数据来源于 USDA FoodData Central。
 """
 
-from typing import Optional
 from decimal import Decimal
-from sqlalchemy import String, Numeric, Text, Boolean
+from typing import Optional
+
+from sqlalchemy import Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from .base import Base, UUIDMixin, TimeStampMixin
+from .base import Base, TimeStampMixin, UUIDMixin
 
 
 class FoodNutrition(Base, UUIDMixin, TimeStampMixin):

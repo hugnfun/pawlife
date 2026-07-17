@@ -16,25 +16,25 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, desc, func
 
-from models.log import MealLog, ActivityLog, WeightLog
+from core.dependencies import get_current_user
+from models.log import ActivityLog, MealLog, WeightLog
 from models.pet import Pet
 from models.user import User
 from schemas.logs import (
-    MealLogCreate,
-    MealLogResponse,
     ActivityLogCreate,
     ActivityLogResponse,
+    LogListResponse,
+    MealLogCreate,
+    MealLogResponse,
     WeightLogCreate,
     WeightLogResponse,
-    LogListResponse,
 )
 from services.database import get_db
-from services.redis import get_redis, RedisService
-from core.dependencies import get_current_user
+from services.redis import RedisService, get_redis
 
 # 配置日志
 logger = logging.getLogger(__name__)
@@ -190,7 +190,7 @@ async def create_meal_log(
 ) -> MealLogResponse:
     """创建饮食记录接口。"""
     try:
-        pet = await check_pet_permission_cached(
+        await check_pet_permission_cached(
             meal_data.pet_id, current_user, db, redis_service, require_active=True
         )
 

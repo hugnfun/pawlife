@@ -5,17 +5,16 @@
 使用 SQLAlchemy 2.0 异步 API。
 """
 
-from typing import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import AsyncGenerator
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
-    AsyncEngine,
 )
-from sqlalchemy.pool import NullPool, QueuePool
 
 from core.config import settings
 

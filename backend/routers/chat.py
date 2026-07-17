@@ -5,15 +5,15 @@
 支持新用户首次建档引导流程（多轮状态机）。
 """
 
-import logging
 import json
-from typing import Optional
+import logging
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
+
+from core.dependencies import get_current_user
 from models.user import User
 from schemas.chat import ChatStreamRequest
-from core.dependencies import get_current_user
 from services.agent.runner import run_agent_streaming
 
 # 配置日志
