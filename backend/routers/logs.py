@@ -27,9 +27,12 @@ from models.user import User
 from schemas.logs import (
     ActivityLogCreate,
     ActivityLogResponse,
+    LogConfirmRequest,
+    LogConfirmResponse,
     LogListResponse,
     MealLogCreate,
     MealLogResponse,
+    PendingLogConfirmation,
     WeightLogCreate,
     WeightLogResponse,
 )
@@ -776,3 +779,176 @@ async def delete_weight_log(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="删除体重记录失败",
         )
+
+
+# ==================== 双通道输入：草稿确认（requirements-v1.1.md §2） ====================
+
+_PERSIST_MAP = {
+    "meal": None,      # 延迟绑定以避免 tools.py 循环 import
+    "weight": None,
+    "activity": None,
+}
+
+
+def _get_persist_fn(log_type: str):
+    """按需加载 tools.py 中的 _persist_xxx 函数（避免顶层循环 import）。"""
+    if _PERSIST_MAP["meal"] is None:
+        from services.agent.tools import _persist_activity, _persist_meal, _persist_weight
+        _PERSIST_MAP["meal"] = _persist_meal
+        _PERSIST_MAP["activity"] = _persist_activity
+        _PERSIST_MAP["weight"] = _persist_weight
+    return _PERSIST_MAP.get(log_type)
+
+
+_LOG_TYPE_TO_CACHE_PREFIX = {
+    "meal": RedisService.CACHE_PREFIX_MEAL_LOGS,
+    "activity": RedisService.CACHE_PREFIX_ACTIVITY_LOGS,
+    "weight": RedisService.CACHE_PREFIX_WEIGHT_LOGS,
+}
+
+
+@router.post(
+    "/confirmations/{draft_id}/confirm",
+    response_model=LogConfirmResponse,
+    summary="确认 AI 提取的日志草稿",
+    description="用户点击「确认」或「修改后确认」时调用；真正写入 DB 并失效对应缓存。",
+)
+async def confirm_log_draft(
+    draft_id: UUID,
+    body: LogConfirmRequest,
+    db: AsyncSession = Depends(get_db),
+    redis_service: RedisService = Depends(get_redis),
+    current_user: User = Depends(get_current_user),
+) -> LogConfirmResponse:
+    """将 AI 提取的日志草稿真正落库（Round 3 双通道 §2）。
+
+    校验规则：
+    - draft 必须存在且未过期
+    - draft.user_id 必须与当前登录用户一致（防止跨用户篡改）
+    - payload_override 若提供，会与原 payload 做 shallow merge
+    """
+    draft = await redis_service.get_log_draft(str(draft_id))
+    if draft is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="草稿不存在或已过期，请重新对话",
+        )
+
+    if draft.get("user_id") != str(current_user.id):
+        # 不暴露"存在但无权"这一细节，统一返回 404
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="草稿不存在或已过期，请重新对话",
+        )
+
+    log_type = draft.get("type")
+    persist_fn = _get_persist_fn(log_type)
+    if persist_fn is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"不支持的草稿类型: {log_type}",
+        )
+
+    # 合并用户覆盖（浅合并，字段级别；不允许覆盖 pet_id/user_id）
+    original_payload = draft.get("payload", {})
+    override = body.payload_override or {}
+    # 剥离敏感字段
+    override.pop("pet_id", None)
+    override.pop("user_id", None)
+    final_payload = {**original_payload, **override}
+    was_edited = bool(override)
+
+    pet_id = UUID(draft["pet_id"])
+    user_id = UUID(draft["user_id"])
+
+    try:
+        result = await persist_fn(pet_id=pet_id, user_id=user_id, payload=final_payload, session=db)
+    except Exception as e:
+        logger.exception(f"确认草稿落库失败: draft_id={draft_id}, type={log_type}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"落库失败: {e}",
+        )
+
+    # 落库成功 → 删 draft（幂等：即使用户手滑重复点击，第二次会因 draft 已删而 404）
+    await redis_service.delete_log_draft(str(draft_id))
+
+    # 失效对应类型的列表缓存
+    cache_prefix = _LOG_TYPE_TO_CACHE_PREFIX.get(log_type)
+    if cache_prefix:
+        await _safe_invalidate_log_cache(redis_service, str(pet_id), cache_prefix)
+
+    # persist_fn 返回的 id 字段名各异（meal_log_id / activity_log_id / weight_log_id），归一化
+    id_key = f"{log_type}_log_id"
+    log_id_str = result.get(id_key)
+    if not log_id_str:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="内部错误：落库返回缺少 ID",
+        )
+
+    logger.info(f"确认草稿落库成功: draft_id={draft_id}, type={log_type}, log_id={log_id_str}, edited={was_edited}")
+
+    return LogConfirmResponse(
+        log_type=log_type,
+        log_id=UUID(log_id_str),
+        was_edited=was_edited,
+    )
+
+
+@router.post(
+    "/confirmations/{draft_id}/cancel",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="取消 AI 提取的日志草稿",
+    description="用户点击「取消」时调用；只删除 Redis 草稿，不落库。",
+)
+async def cancel_log_draft(
+    draft_id: UUID,
+    redis_service: RedisService = Depends(get_redis),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    """取消草稿（Round 3 双通道 §2）。"""
+    draft = await redis_service.get_log_draft(str(draft_id))
+    if draft is None:
+        # 已过期或已确认；幂等：也返回 204
+        logger.info(f"取消草稿：draft_id={draft_id} 已不存在（幂等）")
+        return None
+
+    if draft.get("user_id") != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="草稿不存在或已过期",
+        )
+
+    await redis_service.delete_log_draft(str(draft_id))
+    logger.info(f"取消草稿成功: draft_id={draft_id}")
+    return None
+
+
+@router.get(
+    "/confirmations/{draft_id}",
+    response_model=PendingLogConfirmation,
+    summary="获取草稿详情（可选）",
+    description="调试/前端刷新时使用；返回草稿的当前 payload 与摘要。",
+)
+async def get_log_draft(
+    draft_id: UUID,
+    redis_service: RedisService = Depends(get_redis),
+    current_user: User = Depends(get_current_user),
+) -> PendingLogConfirmation:
+    """读取草稿详情（前端刷新页面时用）。"""
+    draft = await redis_service.get_log_draft(str(draft_id))
+    if draft is None or draft.get("user_id") != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="草稿不存在或已过期",
+        )
+
+    return PendingLogConfirmation(
+        draft_id=draft_id,
+        log_type=draft.get("type"),
+        pet_id=UUID(draft["pet_id"]),
+        payload=draft.get("payload", {}),
+        summary=draft.get("summary", ""),
+        ttl_seconds=RedisService.LOG_DRAFT_TTL,
+    )

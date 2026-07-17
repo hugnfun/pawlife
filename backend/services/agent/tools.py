@@ -15,6 +15,219 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 
+async def _create_log_draft(
+    log_type: str,
+    pet_id: UUID,
+    user_id: UUID,
+    payload: Dict[str, Any],
+    summary: str,
+) -> Dict[str, Any]:
+    """把 AI 提取的日志字段存为草稿，返回 draft_id 供用户确认。
+
+    Args:
+        log_type: "meal" / "weight" / "activity"
+        pet_id: 宠物 UUID
+        user_id: 用户 UUID
+        payload: AI 提取的字段字典（会在 confirm 时用作默认值）
+        summary: 面向用户的中文摘要（用于卡片展示，如"三花 今天 12:30 吃了 50g 鸡胸肉"）
+
+    Returns:
+        Agent 工具的标准返回结构，data 里含 draft_id 和 payload
+    """
+    import uuid
+    from datetime import datetime, timezone
+
+    from services.redis import redis_service
+
+    draft_id = str(uuid.uuid4())
+    draft_data = {
+        "type": log_type,
+        "pet_id": str(pet_id),
+        "user_id": str(user_id),
+        "payload": payload,
+        "summary": summary,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await redis_service.save_log_draft(draft_id, draft_data)
+
+    return {
+        "success": True,
+        "requires_confirmation": True,
+        "error": None,
+        "data": {
+            "draft_id": draft_id,
+            "log_type": log_type,
+            "pet_id": str(pet_id),
+            "payload": payload,
+            "summary": summary,
+        },
+    }
+
+
+async def _persist_meal(
+    pet_id: UUID,
+    user_id: UUID,
+    payload: Dict[str, Any],
+    session: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """真正把饮食记录写入数据库（供 confirm API 复用）。
+
+    Args:
+        session: 可选的外部 AsyncSession。API 端点传入时会走该会话
+                （便于测试 mock 数据库）；否则自己创建。
+    """
+    import uuid
+    from datetime import datetime
+    from decimal import Decimal
+
+    from models.log import MealLog
+    from services.database import db
+
+    food_name = payload["food_name"]
+    amount = float(payload.get("amount", 0))
+    unit = payload.get("unit", "g")
+    meal_time_str = payload.get("meal_time")
+    meal_time = (
+        datetime.fromisoformat(meal_time_str) if meal_time_str else datetime.now()
+    )
+    notes = payload.get("notes")
+    photo_url = payload.get("photo_url")
+
+    async def _do(sess):
+        meal_log = MealLog(
+            id=uuid.uuid4(),
+            pet_id=pet_id,
+            user_id=user_id,
+            food_name=food_name,
+            amount=Decimal(str(amount)),
+            unit=unit,
+            meal_time=meal_time,
+            notes=notes,
+            photo_url=photo_url,
+        )
+        sess.add(meal_log)
+        await sess.commit()
+        logger.info(
+            f"饮食记录创建成功: id={meal_log.id}, pet_id={pet_id}, food={food_name}, amount={amount}"
+        )
+        return {
+            "meal_log_id": str(meal_log.id),
+            "pet_id": str(meal_log.pet_id),
+            "food_name": meal_log.food_name,
+            "amount": float(meal_log.amount),
+            "meal_time": meal_log.meal_time.isoformat(),
+        }
+
+    if session is not None:
+        return await _do(session)
+    async with db.get_session() as sess:
+        return await _do(sess)
+
+
+async def _persist_activity(
+    pet_id: UUID,
+    user_id: UUID,
+    payload: Dict[str, Any],
+    session: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """真正把运动记录写入数据库（供 confirm API 复用）。"""
+    import uuid
+    from datetime import datetime
+
+    from models.log import ActivityLog
+    from services.database import db
+
+    activity_type = payload["activity_type"]
+    duration_minutes = int(payload.get("duration_minutes", 0))
+    activity_time_str = payload.get("activity_time")
+    activity_time = (
+        datetime.fromisoformat(activity_time_str)
+        if activity_time_str
+        else datetime.now()
+    )
+    notes = payload.get("notes")
+
+    async def _do(sess):
+        activity = ActivityLog(
+            id=uuid.uuid4(),
+            pet_id=pet_id,
+            user_id=user_id,
+            activity_type=activity_type,
+            duration_minutes=duration_minutes,
+            activity_time=activity_time,
+            notes=notes,
+        )
+        sess.add(activity)
+        await sess.commit()
+        logger.info(
+            f"活动记录创建成功: id={activity.id}, pet_id={pet_id}, type={activity_type}, duration={duration_minutes}min"
+        )
+        return {
+            "activity_log_id": str(activity.id),
+            "pet_id": str(pet_id),
+            "activity_type": activity_type,
+            "duration_minutes": duration_minutes,
+            "activity_time": activity.activity_time.isoformat(),
+        }
+
+    if session is not None:
+        return await _do(session)
+    async with db.get_session() as sess:
+        return await _do(sess)
+
+
+async def _persist_weight(
+    pet_id: UUID,
+    user_id: UUID,
+    payload: Dict[str, Any],
+    session: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """真正把体重记录写入数据库并更新 Pet.current_weight（供 confirm API 复用）。"""
+    import uuid
+    from datetime import datetime
+    from decimal import Decimal
+
+    from sqlalchemy import select
+
+    from models.log import WeightLog
+    from models.pet import Pet
+    from services.database import db
+
+    weight_kg = float(payload["weight_kg"])
+
+    async def _do(sess):
+        weight_log = WeightLog(
+            id=uuid.uuid4(),
+            pet_id=pet_id,
+            user_id=user_id,
+            weight=Decimal(str(weight_kg)),
+            measurement_time=datetime.now(),
+        )
+        sess.add(weight_log)
+
+        stmt = select(Pet).where(Pet.id == pet_id)
+        result = await sess.execute(stmt)
+        pet = result.scalar_one_or_none()
+        if pet:
+            pet.current_weight = Decimal(str(weight_kg))
+
+        await sess.commit()
+        logger.info(
+            f"体重记录创建成功: id={weight_log.id}, pet_id={pet_id}, weight={weight_kg}kg"
+        )
+        return {
+            "weight_log_id": str(weight_log.id),
+            "pet_id": str(pet_id),
+            "weight_kg": weight_kg,
+            "measurement_time": weight_log.measurement_time.isoformat(),
+        }
+
+    if session is not None:
+        return await _do(session)
+    async with db.get_session() as sess:
+        return await _do(sess)
+
+
 # ========== 宠物档案工具 ==========
 
 class GetPetProfileInput(BaseModel):
@@ -365,7 +578,7 @@ class LogMealTool(BaseTool):
         notes: Optional[str] = None,
         image_url: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """异步执行：记录饮食到数据库。
+        """异步执行：把饮食字段提取为草稿，等待用户确认后再入库。
 
         Args:
             pet_id: 宠物ID，不提供则使用当前活跃宠物
@@ -376,14 +589,9 @@ class LogMealTool(BaseTool):
             image_url: 食物图片URL
 
         Returns:
-            操作结果，包含记录ID
+            草稿结构：{success, requires_confirmation, data: {draft_id, ...}}
         """
-        import uuid
         from datetime import datetime
-        from decimal import Decimal
-
-        from models.log import MealLog
-        from services.database import db
 
         if pet_id is None:
             return {
@@ -399,41 +607,24 @@ class LogMealTool(BaseTool):
             }
 
         try:
-            async with db.get_session() as session:
-                # 创建新饮食记录
-                meal_log = MealLog(
-                    id=uuid.uuid4(),
-                    pet_id=pet_id,
-                    user_id=user_id,
-                    food_name=food_name,
-                    amount=Decimal(str(amount)),
-                    unit="g",
-                    meal_time=datetime.now(),
-                    notes=notes,
-                    photo_url=image_url,
-                )
-                session.add(meal_log)
-                await session.commit()
-
-                logger.info(f"饮食记录创建成功: id={meal_log.id}, pet_id={pet_id}, food={food_name}, amount={amount}")
-
-                return {
-                    "success": True,
-                    "error": None,
-                    "data": {
-                        "meal_log_id": str(meal_log.id),
-                        "pet_id": str(meal_log.pet_id),
-                        "food_name": meal_log.food_name,
-                        "amount": float(meal_log.amount),
-                        "meal_time": meal_log.meal_time.isoformat(),
-                    },
-                }
+            payload = {
+                "food_name": food_name,
+                "amount": amount,
+                "unit": "g",
+                "meal_time": datetime.now().isoformat(),
+                "notes": notes,
+                "photo_url": image_url,
+            }
+            summary = f"记录一次饮食：{food_name} {amount}g"
+            return await _create_log_draft(
+                "meal", pet_id, user_id, payload, summary
+            )
 
         except Exception as e:
-            logger.error(f"Log meal failed: {e}", exc_info=True)
+            logger.error(f"Log meal draft failed: {e}", exc_info=True)
             return {
                 "success": False,
-                "error": f"Log failed: {str(e)}",
+                "error": str(e),
                 "data": None,
             }
 
@@ -464,7 +655,7 @@ class LogActivityTool(BaseTool):
         user_id: Optional[UUID] = None,
         notes: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """异步执行：记录宠物运动活动到数据库。
+        """异步执行：把运动字段提取为草稿，等待用户确认后再入库。
 
         Args:
             pet_id: 宠物ID
@@ -473,13 +664,9 @@ class LogActivityTool(BaseTool):
             notes: 备注
 
         Returns:
-            操作结果，包含记录ID
+            草稿结构：{success, requires_confirmation, data: {draft_id, ...}}
         """
-        import uuid
         from datetime import datetime
-
-        from models.log import ActivityLog
-        from services.database import db
 
         if pet_id is None:
             return {
@@ -498,39 +685,22 @@ class LogActivityTool(BaseTool):
         mapped_type = activity_map.get(activity_type.lower(), "other")
 
         try:
-            from models.log import ActivityLog
-            async with db.get_session() as session:
-                activity = ActivityLog(
-                    id=uuid.uuid4(),
-                    pet_id=pet_id,
-                    user_id=user_id or pet_id,
-                    activity_type=mapped_type,
-                    duration_minutes=int(duration_minutes),
-                    activity_time=datetime.now(),
-                    notes=notes,
-                )
-                session.add(activity)
-                await session.commit()
-
-                logger.info(f"活动记录创建成功: id={activity.id}, pet_id={pet_id}, type={mapped_type}, duration={duration_minutes}min")
-
-                return {
-                    "success": True,
-                    "error": None,
-                    "data": {
-                        "activity_log_id": str(activity.id),
-                        "pet_id": str(pet_id),
-                        "activity_type": mapped_type,
-                        "duration_minutes": duration_minutes,
-                        "activity_time": activity.activity_time.isoformat(),
-                    },
-                }
+            payload = {
+                "activity_type": mapped_type,
+                "duration_minutes": int(duration_minutes),
+                "activity_time": datetime.now().isoformat(),
+                "notes": notes,
+            }
+            summary = f"记录一次运动：{activity_type} {int(duration_minutes)} 分钟"
+            return await _create_log_draft(
+                "activity", pet_id, user_id or pet_id, payload, summary
+            )
 
         except Exception as e:
-            logger.error(f"Log activity failed: {e}", exc_info=True)
+            logger.error(f"Log activity draft failed: {e}", exc_info=True)
             return {
                 "success": False,
-                "error": f"Log failed: {str(e)}",
+                "error": str(e),
                 "data": None,
             }
 
@@ -557,23 +727,15 @@ class LogWeightTool(BaseTool):
         pet_id: Optional[UUID] = None,
         user_id: Optional[UUID] = None,
     ) -> Dict[str, Any]:
-        """异步执行：记录宠物体重到数据库，并更新 Pet.current_weight。
+        """异步执行：把体重字段提取为草稿，等待用户确认后再入库。
 
         Args:
             pet_id: 宠物ID
             weight_kg: 体重（公斤）
 
         Returns:
-            操作结果，包含记录ID
+            草稿结构：{success, requires_confirmation, data: {draft_id, ...}}
         """
-        import uuid
-        from datetime import datetime
-        from decimal import Decimal
-
-        from models.log import WeightLog
-        from models.pet import Pet
-        from services.database import db
-
         if pet_id is None:
             return {
                 "success": False,
@@ -582,45 +744,17 @@ class LogWeightTool(BaseTool):
             }
 
         try:
-            async with db.get_session() as session:
-                # 创建体重记录
-                weight_log = WeightLog(
-                    id=uuid.uuid4(),
-                    pet_id=pet_id,
-                    user_id=user_id or pet_id,
-                    weight=Decimal(str(weight_kg)),
-                    measurement_time=datetime.now(),
-                )
-                session.add(weight_log)
-
-                # 同步更新宠物的当前体重
-                from sqlalchemy import select
-                stmt = select(Pet).where(Pet.id == pet_id)
-                result = await session.execute(stmt)
-                pet = result.scalar_one_or_none()
-                if pet:
-                    pet.current_weight = Decimal(str(weight_kg))
-
-                await session.commit()
-
-                logger.info(f"体重记录创建成功: id={weight_log.id}, pet_id={pet_id}, weight={weight_kg}kg")
-
-                return {
-                    "success": True,
-                    "error": None,
-                    "data": {
-                        "weight_log_id": str(weight_log.id),
-                        "pet_id": str(pet_id),
-                        "weight_kg": weight_kg,
-                        "measurement_time": weight_log.measurement_time.isoformat(),
-                    },
-                }
+            payload = {"weight_kg": weight_kg}
+            summary = f"记录体重：{weight_kg} kg"
+            return await _create_log_draft(
+                "weight", pet_id, user_id or pet_id, payload, summary
+            )
 
         except Exception as e:
-            logger.error(f"Log weight failed: {e}", exc_info=True)
+            logger.error(f"Log weight draft failed: {e}", exc_info=True)
             return {
                 "success": False,
-                "error": f"Log failed: {str(e)}",
+                "error": str(e),
                 "data": None,
             }
 
