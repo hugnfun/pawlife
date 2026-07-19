@@ -12,6 +12,8 @@ import { createSSEClient } from '@/utils/sse'
 import { getAIConversationStreamUrl } from '@/api/ai'
 import { audioRecorder } from '@/utils/audio'
 import { uploadAudio, uploadImage } from '@/utils/upload'
+import ConfirmationCard from '@/components/chat/ConfirmationCard.vue'
+import type { PendingLogConfirmation } from '@/types/api'
 
 const chatStore = useChatStore()
 const authStore = useAuthStore()
@@ -127,6 +129,16 @@ async function sendMessageStream(message: string) {
       }
       scrollToBottom()
     },
+    // 双通道输入：识别 confirmation_card 事件，把 draft 挂到当前 assistant 消息上
+    onEvent: (eventType, data) => {
+      if (eventType === 'confirmation_card' && data) {
+        // 确保消息体已定型（把 streamingContent 落到 msg.content 上）
+        if (assistantMsg.content === '' && chatStore.streamingContent) {
+          assistantMsg.content = chatStore.streamingContent
+        }
+        chatStore.attachPendingConfirmation(data as PendingLogConfirmation)
+      }
+    },
     onComplete: () => {
       chatStore.setStreaming(false)
       chatStore.setLoading(false)
@@ -158,6 +170,15 @@ async function sendMessageNonStream(message: string) {
   chatStore.addMessage('assistant', response.response, response.suggestions)
   if (response.session_id) {
     chatStore.setSessionId(response.session_id)
+  }
+  // 双通道输入：非流式响应可能带 pending_confirmations 数组
+  const pendingList = (response as any).pending_confirmations
+  if (Array.isArray(pendingList) && pendingList.length > 0) {
+    for (const item of pendingList) {
+      if (item?.type === 'confirmation_card' && item.data) {
+        chatStore.attachPendingConfirmation(item.data as PendingLogConfirmation)
+      }
+    }
   }
   chatStore.setLoading(false)
   scrollToBottom()
@@ -414,6 +435,12 @@ onUnmounted(() => {
             <text v-if="msg.role === 'user'" class="message-content">{{ msg.content }}</text>
             <mp-html v-else :content="msg.content" class="message-content" />
           </view>
+          <!-- 双通道输入：AI 提取的日志草稿确认卡片 -->
+          <ConfirmationCard
+            v-if="msg.role === 'assistant' && msg.pendingConfirmation"
+            :draft="msg.pendingConfirmation"
+            :status="msg.confirmationStatus"
+          />
           <!-- 建议快捷按钮 -->
           <view v-if="msg.suggestions && msg.suggestions.length > 0" class="suggestions">
             <button

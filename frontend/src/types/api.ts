@@ -35,6 +35,20 @@ export interface ChatMessage {
   timestamp: number
   tool_calls?: any[]
   suggestions?: string[]
+  // 双通道输入：AI 提取的待确认草稿。有值时前端应在该消息下方渲染确认卡片。
+  // 用户点击确认/取消后调用后端 confirmations 端点，本地把 pendingConfirmation
+  // 清空并把状态记到消息上（confirmed / cancelled）。
+  pendingConfirmation?: PendingLogConfirmation | null
+  confirmationStatus?: 'pending' | 'confirmed' | 'cancelled' | 'expired'
+}
+
+// 双通道输入：AI 提取的日志草稿（对齐后端 schemas.logs.PendingLogConfirmation）
+export interface PendingLogConfirmation {
+  draft_id: string
+  log_type: 'meal' | 'weight' | 'activity'
+  pet_id: string
+  payload: Record<string, any>
+  summary: string
 }
 
 // AI 对话请求

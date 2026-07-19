@@ -42,6 +42,7 @@ async def chat_non_stream(
         dict: 包含响应文本和建议
     """
     full_response = ""
+    pending_confirmations: list = []
 
     async for chunk in run_agent_streaming(
         user_id=current_user.id,
@@ -54,6 +55,10 @@ async def chat_non_stream(
         onboarding_step=request.onboarding_step,
         onboarding_data=request.onboarding_data,
     ):
+        # 结构化事件（如 confirmation_card）收集到单独字段，不拼进文本
+        if isinstance(chunk, dict):
+            pending_confirmations.append(chunk)
+            continue
         full_response += chunk
 
     logger.info(f"非流式对话完成: user_id={current_user.id}")
@@ -62,6 +67,7 @@ async def chat_non_stream(
         "response": full_response,
         "session_id": request.session_id or "default",
         "suggestions": [],
+        "pending_confirmations": pending_confirmations,
     }
 
 
@@ -96,7 +102,15 @@ async def chat_stream(
             onboarding_step=request.onboarding_step,
             onboarding_data=request.onboarding_data,
         ):
-            # 每个 chunk 包装成 SSE 格式，is_final 始终为 False 直到结束
+            # 双通道输入：runner 可能 yield 结构化事件（如 confirmation_card），单独打包
+            if isinstance(chunk, dict):
+                event_type = chunk.get("type")
+                if event_type:
+                    yield f"data: {json.dumps({'event': event_type, 'data': chunk.get('data'), 'is_final': False})}\n\n"
+                    continue
+                # 未知 dict 类型，兜底跳过
+                continue
+            # 普通文本 chunk 沿用原格式
             yield f"data: {json.dumps({'chunk': chunk, 'is_final': False})}\n\n"
 
         # 发送结束标记

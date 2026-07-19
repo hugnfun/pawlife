@@ -1,7 +1,7 @@
 // AI 对话状态 store
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { ChatMessage } from '@/types/api'
+import type { ChatMessage, PendingLogConfirmation } from '@/types/api'
 
 // 简单 ID 生成，兼容微信小程序
 function nanoid(size = 21) {
@@ -98,6 +98,30 @@ export const useChatStore = defineStore(
       onboardingData.value = data
     }
 
+    // 双通道输入：把 AI 返回的 draft 附加到最后一条 assistant 消息上
+    function attachPendingConfirmation(draft: PendingLogConfirmation) {
+      if (messages.value.length === 0) return
+      const lastMsg = messages.value[messages.value.length - 1]
+      if (lastMsg.role === 'assistant') {
+        lastMsg.pendingConfirmation = draft
+        lastMsg.confirmationStatus = 'pending'
+      }
+    }
+
+    // 双通道输入：更新草稿状态（confirm 成功、cancel、过期等），并清空 pendingConfirmation
+    function updateConfirmationStatus(
+      draftId: string,
+      status: 'confirmed' | 'cancelled' | 'expired',
+    ) {
+      const msg = messages.value.find(
+        (m) => m.pendingConfirmation?.draft_id === draftId,
+      )
+      if (!msg) return
+      msg.confirmationStatus = status
+      // 保留 pendingConfirmation 数据用于显示"已确认 xxxg 鸡胸肉"这种回执
+      // 但把状态标记为 non-pending 让卡片切换到只读回执样式
+    }
+
     // 从本地恢复活跃宠物
     function restoreActivePet() {
       const petId = uni.getStorageSync('active_pet_id')
@@ -126,6 +150,8 @@ export const useChatStore = defineStore(
       setActivePet,
       restoreActivePet,
       setOnboarding,
+      attachPendingConfirmation,
+      updateConfirmationStatus,
     }
   }
 )
