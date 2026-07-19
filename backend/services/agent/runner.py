@@ -87,12 +87,16 @@ async def run_agent_streaming(
     history: Optional[AIMessage] = None,
     onboarding_step: Optional[str] = None,
     onboarding_data: Optional[Dict[str, Any]] = None,
-) -> AsyncGenerator[str, None]:
+) -> AsyncGenerator[Any, None]:
     """
     运行 Agent 流式推理，使用 LangGraph astream_events 原生流式支持。
 
     监听 `on_chat_model_stream` 事件，直接将 Claude 的 token chunk 透传输出。
     如果节点已经预先生成了完整回复（比如 onboarding 引导提问），直接分段输出。
+
+    另外：如果本轮工具调用产生了需要用户确认的草稿（requires_confirmation=True），
+    在流末尾追加 yield 一个 dict 事件 `{"type": "confirmation_card", "data": {...}}`
+    供 SSE 路由包装为特殊事件类型转发给前端。
 
     Args:
         user_id: 用户 ID
@@ -106,7 +110,9 @@ async def run_agent_streaming(
         onboarding_data: 已收集的建档数据
 
     Yields:
-        内容块，每个块是一段文本（来自 Claude 流式 token 或预先生成的回复）
+        - str：Claude 流式 token 或预生成回复段落
+        - dict：结构化事件（当前支持 `type: confirmation_card`），
+                供 chat 路由映射为专属 SSE event。
     """
     # 创建初始状态，保留 onboarding 上下文（从 Redis 加载 L1 历史）
     initial_state = await create_initial_state(
@@ -166,6 +172,19 @@ async def run_agent_streaming(
             for chunk in paragraphs:
                 if chunk:
                     yield chunk
+
+    # 双通道输入：扫描 tool_outputs，若有 requires_confirmation 项则追加 confirmation_card 事件
+    # 这样前端在文本流结束后可以立即渲染确认卡片，用户点击后走 /confirmations/*/confirm 端点
+    if final_state:
+        tool_outputs = final_state.get("tool_outputs") or []
+        for tool_output in tool_outputs:
+            if not isinstance(tool_output, dict):
+                continue
+            if tool_output.get("requires_confirmation") and tool_output.get("data"):
+                yield {
+                    "type": "confirmation_card",
+                    "data": tool_output["data"],
+                }
 
     logger.info(f"流式推理完成: session_id={session_id}")
 

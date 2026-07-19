@@ -12,6 +12,8 @@ export interface SSEEvent {
 export interface SSEOptions {
   onMessage?: (event: SSEEvent) => void
   onChunk?: (chunk: string, isFinal: boolean) => void
+  // 双通道输入：结构化事件（如 confirmation_card），会带 event 字段和 data 载荷
+  onEvent?: (eventType: string, data: any) => void
   onOpen?: () => void
   onError?: (error: Error) => void
   onComplete?: () => void
@@ -50,7 +52,10 @@ export class SSEClient {
 
       try {
         const data = JSON.parse(event.data)
-        if (data.chunk && this.options.onChunk) {
+        // 双通道输入：识别结构化事件（如 confirmation_card）
+        if (data.event && this.options.onEvent) {
+          this.options.onEvent(data.event, data.data)
+        } else if (data.chunk && this.options.onChunk) {
           this.options.onChunk(data.chunk, data.is_final || false)
         }
 
@@ -123,7 +128,10 @@ export class SSEClient {
 
         try {
           const json = JSON.parse(data)
-          if (json.chunk && options.onChunk) {
+          // 双通道输入：识别结构化事件（如 confirmation_card）
+          if (json.event && options.onEvent) {
+            options.onEvent(json.event, json.data)
+          } else if (json.chunk && options.onChunk) {
             options.onChunk(json.chunk, json.is_final || false)
             if (json.is_final) {
               isFinal = true

@@ -1,6 +1,6 @@
 // 记录相关 API
 
-import { get } from './index'
+import { get, post } from './index'
 import type { MealLog } from '@/types/api'
 
 // 获取时间线记录
@@ -35,4 +35,23 @@ export function getTodayStats(petId: string): Promise<{
   nutrition_completeness: number
 }> {
   return get(`/v1/logs/today-stats?pet_id=${petId}`)
+}
+
+// 双通道输入：确认 AI 提取的日志草稿
+export function confirmLogDraft(
+  draftId: string,
+  payloadOverride: Record<string, any> | null = null,
+): Promise<{
+  log_type: string
+  log_id: string
+  was_edited: boolean
+}> {
+  return post(`/v1/logs/confirmations/${draftId}/confirm`, {
+    payload_override: payloadOverride,
+  })
+}
+
+// 双通道输入：取消 AI 提取的日志草稿
+export function cancelLogDraft(draftId: string): Promise<void> {
+  return post(`/v1/logs/confirmations/${draftId}/cancel`, {})
 }
