@@ -83,7 +83,7 @@ class User(Base, UUIDMixin, TimeStampMixin):
 
     # 状态字段
     role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole),
+        Enum(UserRole, values_callable=lambda x: [e.value for e in x]),
         default=UserRole.USER,
         nullable=False,
         comment="用户角色",
@@ -177,7 +177,7 @@ class FamilyMember(Base, TimeStampMixin):
 
     # 角色字段
     role: Mapped[FamilyRole] = mapped_column(
-        Enum(FamilyRole),
+        Enum(FamilyRole, values_callable=lambda x: [e.value for e in x]),
         default=FamilyRole.MEMBER,
         nullable=False,
         comment="在家庭中的角色",

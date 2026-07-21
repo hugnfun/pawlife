@@ -69,13 +69,13 @@ class Recipe(Base, UUIDMixin, TimeStampMixin):
     )
 
     recipe_type: Mapped[RecipeType] = mapped_column(
-        Enum(RecipeType),
+        Enum(RecipeType, values_callable=lambda x: [e.value for e in x]),
         default=RecipeType.DAILY,
         nullable=False,
         comment="食谱类型",
     )
     source: Mapped[RecipeSource] = mapped_column(
-        Enum(RecipeSource),
+        Enum(RecipeSource, values_callable=lambda x: [e.value for e in x]),
         default=RecipeSource.AI_GENERATED,
         nullable=False,
         comment="食谱来源",

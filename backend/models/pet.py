@@ -94,7 +94,7 @@ class Pet(Base, UUIDMixin, TimeStampMixin):
         comment="宠物名字",
     )
     species: Mapped[PetSpecies] = mapped_column(
-        Enum(PetSpecies),
+        Enum(PetSpecies, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         comment="物种",
     )
@@ -104,7 +104,7 @@ class Pet(Base, UUIDMixin, TimeStampMixin):
         comment="品种",
     )
     gender: Mapped[PetGender] = mapped_column(
-        Enum(PetGender),
+        Enum(PetGender, values_callable=lambda x: [e.value for e in x]),
         default=PetGender.UNKNOWN,
         nullable=False,
         comment="性别",
@@ -115,7 +115,7 @@ class Pet(Base, UUIDMixin, TimeStampMixin):
         comment="出生日期",
     )
     neutered_status: Mapped[NeuteredStatus] = mapped_column(
-        Enum(NeuteredStatus),
+        Enum(NeuteredStatus, values_callable=lambda x: [e.value for e in x]),
         default=NeuteredStatus.UNKNOWN,
         nullable=False,
         comment="绝育状态",
@@ -133,7 +133,7 @@ class Pet(Base, UUIDMixin, TimeStampMixin):
         comment="理想体重 (kg)",
     )
     body_condition_score: Mapped[Optional[BodyConditionScore]] = mapped_column(
-        Enum(BodyConditionScore),
+        Enum(BodyConditionScore, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
         comment="体型评分",
     )
@@ -274,7 +274,7 @@ class DewormingRecord(Base, UUIDMixin, TimeStampMixin):
         comment="宠物ID",
     )
     deworming_type: Mapped[DewormingType] = mapped_column(
-        Enum(DewormingType),
+        Enum(DewormingType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         comment="驱虫类型",
     )

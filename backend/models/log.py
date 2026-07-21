@@ -61,7 +61,7 @@ class MealLog(Base, UUIDMixin, TimeStampMixin):
         comment="食物名称",
     )
     food_type: Mapped[FoodType] = mapped_column(
-        Enum(FoodType),
+        Enum(FoodType, values_callable=lambda x: [e.value for e in x]),
         default=FoodType.MAIN,
         nullable=False,
         comment="食物类型",
@@ -139,7 +139,7 @@ class ActivityLog(Base, UUIDMixin, TimeStampMixin):
         comment="记录用户ID",
     )
     activity_type: Mapped[ActivityType] = mapped_column(
-        Enum(ActivityType),
+        Enum(ActivityType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         comment="活动类型",
     )
