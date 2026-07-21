@@ -83,7 +83,7 @@ class Reminder(Base, UUIDMixin, TimeStampMixin):
     )
 
     reminder_type: Mapped[ReminderType] = mapped_column(
-        Enum(ReminderType),
+        Enum(ReminderType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         comment="提醒类型",
     )
@@ -107,7 +107,7 @@ class Reminder(Base, UUIDMixin, TimeStampMixin):
 
     # 重复设置
     repeat_type: Mapped[RepeatType] = mapped_column(
-        Enum(RepeatType),
+        Enum(RepeatType, values_callable=lambda x: [e.value for e in x]),
         default=RepeatType.NONE,
         nullable=False,
         comment="重复类型",
@@ -119,7 +119,7 @@ class Reminder(Base, UUIDMixin, TimeStampMixin):
 
     # 状态跟踪
     status: Mapped[ReminderStatus] = mapped_column(
-        Enum(ReminderStatus),
+        Enum(ReminderStatus, values_callable=lambda x: [e.value for e in x]),
         default=ReminderStatus.PENDING,
         nullable=False,
         comment="提醒状态",
