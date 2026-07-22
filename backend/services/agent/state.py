@@ -80,6 +80,12 @@ class AgentState(TypedDict):
     # 待确认操作暂存的数据
     pending_data: Optional[Dict[str, Any]]  # 暂存的数据
 
+    # 紧急意图检测（requirements-v1.1.md §4）
+    # 是否命中高风险关键词
+    emergency_triggered: bool
+    # 命中的风险分类（poisoning / trauma / respiratory / digestive / other / None）
+    emergency_category: Optional[str]
+
 
 async def create_initial_state(
     user_id: UUID,
@@ -160,4 +166,6 @@ async def create_initial_state(
         onboarding_data=onboarding_data or {},
         pending_confirmation=pending_confirmation,
         pending_data=pending_data,
+        emergency_triggered=False,
+        emergency_category=None,
     )
