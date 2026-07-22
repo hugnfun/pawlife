@@ -4,8 +4,8 @@ Redis 服务测试。
 使用 MockRedis 测试业务逻辑。
 """
 
+
 import pytest
-from unittest.mock import AsyncMock
 
 
 @pytest.mark.asyncio

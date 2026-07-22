@@ -3,8 +3,9 @@
 """
 
 import io
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 from httpx import AsyncClient
 
 

@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from models.user import UserRole
 
@@ -33,9 +33,7 @@ class UserProfile(BaseModel):
     is_active: bool = Field(..., description="是否激活")
     last_login_at: Optional[datetime] = Field(None, description="最后登录时间")
 
-    class Config:
-        """Pydantic 配置。"""
-        from_attributes = True  # 允许从 ORM 模型转换
+    model_config = ConfigDict(from_attributes=True)  # 允许从 ORM 模型转换
 
 
 class TokenResponse(BaseModel):

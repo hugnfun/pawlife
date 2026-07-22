@@ -4,8 +4,9 @@
 测试健康报告工具的端到端逻辑。
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 class TestHealthReportTool:

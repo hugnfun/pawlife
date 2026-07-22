@@ -4,8 +4,9 @@
 测试食物图像识别和语音转文字。
 """
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 
 
 class TestRecognizeFoodImageTool:

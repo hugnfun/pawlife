@@ -26,7 +26,7 @@ router = APIRouter(prefix="/pets", tags=["宠物管理"])
 
 
 @router.post(
-    "/",
+    "",
     response_model=PetResponse,
     status_code=status.HTTP_201_CREATED,
     summary="创建宠物档案",
@@ -76,7 +76,7 @@ async def create_pet(
 
 
 @router.get(
-    "/",
+    "",
     response_model=PetListResponse,
     summary="获取宠物列表",
     description="获取当前用户的所有宠物列表。"

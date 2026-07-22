@@ -5,7 +5,7 @@
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
@@ -108,14 +108,14 @@ async def wechat_login(
                     avatar_url=request.avatar_url,
                     role=UserRole.USER,
                     is_active=True,
-                    last_login_at=datetime.utcnow(),
+                    last_login_at=datetime.now(timezone.utc),
                 )
                 db.add(user)
                 await db.flush()  # 获取生成的 ID
                 logger.info(f"新用户注册完成: user_id={user.id}, openid={openid}")
             else:
                 # 更新最后登录时间
-                user.last_login_at = datetime.utcnow()
+                user.last_login_at = datetime.now(timezone.utc)
                 if request.nickname and not user.nickname:
                     user.nickname = request.nickname
                 if request.avatar_url and not user.avatar_url:
@@ -140,7 +140,7 @@ async def wechat_login(
         refresh_token = create_refresh_token(subject=user.id)
 
         # 4. 在 Redis 中存储会话上下文和 session_key（用于后续微信消息解密）
-        session_id = f"session_{user.id}_{datetime.utcnow().timestamp()}"
+        session_id = f"session_{user.id}_{datetime.now(timezone.utc).timestamp()}"
         session_context = {
             "user_id": str(user.id),
             "openid": openid,
@@ -391,7 +391,7 @@ async def dev_login(
         await db.commit()
         await db.refresh(user)
 
-    user.last_login_at = datetime.utcnow()
+    user.last_login_at = datetime.now(timezone.utc)
     await db.commit()
 
     # 生成 JWT

@@ -4,8 +4,9 @@ Agent 工具单元测试。
 使用 mock 数据库和 API 测试各个工具的逻辑。
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 class TestEvaluateDietTool:
@@ -62,6 +63,7 @@ class TestScheduleReminderTool:
 
         with patch("services.database.db") as mock_db:
             mock_session = AsyncMock()
+            mock_session.add = MagicMock()  # session.add 是同步方法
             mock_session.commit = AsyncMock()
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
             mock_session.__aexit__ = AsyncMock(return_value=False)

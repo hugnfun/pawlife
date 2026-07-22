@@ -2,8 +2,9 @@
 认证路由集成测试。
 """
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 from httpx import AsyncClient
 
 

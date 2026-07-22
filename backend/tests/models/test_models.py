@@ -5,13 +5,14 @@
 """
 
 import uuid
+from datetime import datetime, timezone
+
 import pytest
-from datetime import date, datetime
 from sqlalchemy import select
 
+from models.log import MealLog, WeightLog
+from models.pet import NeuteredStatus, Pet, PetGender, PetSpecies
 from models.user import User, UserRole
-from models.pet import Pet, PetSpecies, PetGender, NeuteredStatus
-from models.log import MealLog, ActivityLog, WeightLog
 
 
 @pytest.mark.asyncio
@@ -99,7 +100,7 @@ async def test_meal_log_model(test_db):
         amount=50,
         unit="g",
         food_type=MealLog.FoodType.MAIN,
-        meal_time=datetime.utcnow(),
+        meal_time=datetime.now(timezone.utc),
     )
     test_db.add(meal)
     await test_db.flush()
@@ -136,7 +137,7 @@ async def test_weight_log_model(test_db):
         pet_id=pet.id,
         user_id=user.id,
         weight=4.5,
-        measurement_time=datetime.utcnow(),
+        measurement_time=datetime.now(timezone.utc),
     )
     test_db.add(weight_log)
     await test_db.flush()

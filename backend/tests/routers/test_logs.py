@@ -8,10 +8,10 @@
 - 空结果 → 哨兵值防穿透
 """
 
-import pytest
 from datetime import datetime, timezone
-from httpx import AsyncClient
 
+import pytest
+from httpx import AsyncClient
 
 # ==================== 饮食记录 ====================
 
@@ -527,8 +527,6 @@ async def test_pet_permission_cached_write_path(async_client: AsyncClient, sampl
 
     通过检查 mock_redis 的调用记录验证缓存路径生效。
     """
-    from unittest.mock import AsyncMock
-    from services.redis import get_redis
     # 拿到 mock_redis 实例，直接读它的 call_count
     # 因为 conftest 里 fixture 是模块级的 mock，我们改一下策略：
     # 第一次调用 → get_pet_permission_cached(None) → 走 DB → set_pet_permission_cached

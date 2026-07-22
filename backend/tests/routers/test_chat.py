@@ -2,8 +2,9 @@
 对话路由集成测试。
 """
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import AsyncMock, patch
 from httpx import AsyncClient
 
 
@@ -17,7 +18,7 @@ async def test_chat_non_stream(async_client: AsyncClient, auth_headers):
 
     with patch("routers.chat.run_agent_streaming", side_effect=mock_stream):
         response = await async_client.post(
-            "/api/v1/chat/",
+            "/api/v1/chat",
             headers=auth_headers,
             json={
                 "message": "你好",
@@ -41,7 +42,7 @@ async def test_chat_non_stream_with_pet_id(
 
     with patch("routers.chat.run_agent_streaming", side_effect=mock_stream):
         response = await async_client.post(
-            "/api/v1/chat/",
+            "/api/v1/chat",
             headers=auth_headers,
             json={
                 "message": "我家宠物最近怎么样？",
@@ -59,7 +60,7 @@ async def test_chat_non_stream_with_pet_id(
 async def test_chat_requires_auth(async_client: AsyncClient):
     """测试对话接口无认证 → 401。"""
     response = await async_client.post(
-        "/api/v1/chat/",
+        "/api/v1/chat",
         json={"message": "你好"},
     )
     assert response.status_code == 401

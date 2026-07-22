@@ -5,7 +5,7 @@ import type { Family, FamilyMember } from '@/types/api'
 
 // 获取我的家庭组列表
 export function getMyFamilies(): Promise<Family[]> {
-  return get('/v1/families/')
+  return get('/v1/families')
 }
 
 // 获取家庭组详情
@@ -20,7 +20,7 @@ export function getFamilyMembers(familyId: string): Promise<FamilyMember[]> {
 
 // 创建家庭组
 export function createFamily(name: string): Promise<Family> {
-  return post('/v1/families/', { name })
+  return post('/v1/families', { name })
 }
 
 // 通过邀请码加入家庭组
