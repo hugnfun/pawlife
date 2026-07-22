@@ -5,7 +5,7 @@
 使用 python-jose 处理 JWT。
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 from uuid import UUID
 
@@ -34,16 +34,16 @@ def create_access_token(
         str: 编码后的 JWT 令牌
     """
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(
+        expire = datetime.now(timezone.utc) + timedelta(
             minutes=settings.access_token_expire_minutes
         )
 
     claims = {
         "sub": str(subject),
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": datetime.now(timezone.utc),
         "token_type": "access",
     }
 
@@ -72,16 +72,16 @@ def create_refresh_token(
         str: 编码后的 JWT 刷新令牌
     """
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(
+        expire = datetime.now(timezone.utc) + timedelta(
             days=settings.refresh_token_expire_days
         )
 
     claims = {
         "sub": str(subject),
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": datetime.now(timezone.utc),
         "token_type": "refresh",
     }
 

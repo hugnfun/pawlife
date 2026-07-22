@@ -135,8 +135,8 @@ class COSService:
         Returns:
             格式: {prefix}/{yyyy/mm/dd}/{uuid}.{ext}
         """
-        from datetime import datetime
-        now = datetime.utcnow()
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
         date_path = now.strftime("%Y/%m/%d")
         filename = f"{uuid.uuid4().hex[:16]}.{ext}"
         return f"{prefix}/{date_path}/{filename}"

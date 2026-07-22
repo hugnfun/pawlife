@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from models.pet import (
     BodyConditionScore,
@@ -96,9 +96,7 @@ class PetResponse(BaseModel):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
 
-    class Config:
-        """Pydantic 配置。"""
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PetListResponse(BaseModel):

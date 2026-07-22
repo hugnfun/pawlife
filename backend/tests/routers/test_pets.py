@@ -10,7 +10,7 @@ from httpx import AsyncClient
 async def test_create_pet(async_client: AsyncClient, auth_headers):
     """测试创建宠物。"""
     response = await async_client.post(
-        "/api/v1/pets/",
+        "/api/v1/pets",
         headers=auth_headers,
         json={
             "name": "小黑",
@@ -29,7 +29,7 @@ async def test_create_pet(async_client: AsyncClient, auth_headers):
 async def test_list_pets(async_client: AsyncClient, sample_pet, auth_headers):
     """测试列出用户宠物。"""
     response = await async_client.get(
-        "/api/v1/pets/",
+        "/api/v1/pets",
         headers=auth_headers,
     )
     assert response.status_code == 200
@@ -87,5 +87,5 @@ async def test_pet_not_found(async_client: AsyncClient, auth_headers):
 @pytest.mark.asyncio
 async def test_pets_requires_auth(async_client: AsyncClient):
     """测试宠物接口无认证 → 401。"""
-    response = await async_client.get("/api/v1/pets/")
+    response = await async_client.get("/api/v1/pets")
     assert response.status_code == 401

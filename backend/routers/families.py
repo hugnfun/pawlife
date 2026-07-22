@@ -33,7 +33,7 @@ router = APIRouter(prefix="/families", tags=["家庭组管理"])
 
 
 @router.post(
-    "/",
+    "",
     response_model=FamilyResponse,
     status_code=status.HTTP_201_CREATED,
     summary="创建家庭组",
@@ -95,7 +95,7 @@ async def create_family(
 
 
 @router.get(
-    "/",
+    "",
     response_model=List[FamilyResponse],
     summary="获取我的家庭组列表",
     description="获取当前用户加入的所有家庭组列表。"

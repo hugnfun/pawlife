@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from models.user import FamilyRole
 
@@ -26,9 +26,7 @@ class FamilyResponse(BaseModel):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
 
-    class Config:
-        """Pydantic 配置。"""
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FamilyMemberResponse(BaseModel):
@@ -41,9 +39,7 @@ class FamilyMemberResponse(BaseModel):
     nickname: Optional[str] = Field(None, description="用户昵称")
     avatar_url: Optional[str] = Field(None, description="用户头像")
 
-    class Config:
-        """Pydantic 配置。"""
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FamilyJoinRequest(BaseModel):

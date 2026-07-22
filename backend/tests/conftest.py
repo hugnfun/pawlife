@@ -10,18 +10,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import Text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy import Text
 
 from models.base import Base
+from models.pet import NeuteredStatus, Pet, PetGender, PetSpecies
 from models.user import User, UserRole
-from models.pet import Pet, PetSpecies, PetGender, NeuteredStatus
-
 
 # 使用 SQLite 内存数据库替代 PostgreSQL
 TEST_DATABASE_URL = "sqlite+aiosqlite:///file::memory:?cache=shared&uri=true"
@@ -39,10 +38,8 @@ async def test_engine():
     在创建表之前，将 pgvector 和 JSONB 类型替换为 SQLite 兼容类型。
     """
     # 替换 pgvector.Vector 为 Text，JSONB 为 Text
-    from pgvector.sqlalchemy import Vector
-    from sqlalchemy.dialects.postgresql import JSONB
-    from models.memory import PetMemory
     from models.audit import AuditLog
+    from models.memory import PetMemory
 
     # 保存原始类型以便恢复
     orig_embedding_type = PetMemory.__table__.c.embedding.type
@@ -86,10 +83,10 @@ async def test_db(test_engine) -> AsyncGenerator[AsyncSession, None]:
 @pytest_asyncio.fixture
 async def test_app(test_engine):
     """创建测试用 FastAPI 应用，替换数据库和 Redis 依赖。"""
+    from core.config import settings
     from main import app
     from services.database import get_db
-    from services.redis import redis_service, get_redis
-    from core.config import settings
+    from services.redis import get_redis, redis_service
 
     # 临时切换到 testing 环境，避免开发模式 mock 用户
     orig_env = settings.environment
@@ -304,6 +301,8 @@ def mock_redis():
     redis.set_log_cache = AsyncMock(side_effect=mock_set_log_cache)
     redis.invalidate_log_cache = AsyncMock(side_effect=mock_invalidate_log_cache)
     redis._build_log_cache_key = MagicMock(side_effect=_build_key)
+    # 避免 MagicMock 自动生成的 async 属性在 GC 时触发 "coroutine never awaited" warning
+    redis._cancel = MagicMock()
     redis.CACHE_PREFIX_MEAL_LOGS = RedisService.CACHE_PREFIX_MEAL_LOGS
     redis.CACHE_PREFIX_WEIGHT_LOGS = RedisService.CACHE_PREFIX_WEIGHT_LOGS
     redis.CACHE_NULL_SENTINEL = RedisService.CACHE_NULL_SENTINEL

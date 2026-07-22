@@ -24,7 +24,7 @@ router = APIRouter(prefix="/chat", tags=["对话"])
 
 
 @router.post(
-    "/",
+    "",
     summary="非流式对话",
     description="与 AI 宠物健康助手进行对话（非流式，用于小程序降级）。"
 )

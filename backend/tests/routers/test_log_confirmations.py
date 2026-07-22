@@ -9,13 +9,11 @@
 - 验证 cancel 幂等（重复 cancel 返回 204）
 """
 
-import pytest
 from datetime import datetime, timezone
 from uuid import uuid4
 
+import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
-
 
 # ==================== 辅助函数 ====================
 
