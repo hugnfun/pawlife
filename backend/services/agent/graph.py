@@ -20,6 +20,7 @@ from .nodes import (
     check_onboarding_status,
     check_pending_confirmation,
     classify_intent,
+    emergency_intent_guard,
     finalize_onboarding,
     generate_response,
     handle_error,
@@ -29,6 +30,7 @@ from .nodes import (
     process_onboarding_step,
     process_pending_confirmation,
     route_by_intent,
+    should_bypass_for_emergency,
     should_process_pending,
     should_start_onboarding,
     start_onboarding_prompt,
@@ -69,6 +71,7 @@ def create_agent_graph() -> StateGraph:
     workflow.add_node("process_onboarding_step", process_onboarding_step)
     workflow.add_node("finalize_onboarding", finalize_onboarding)
     # 正常对话节点
+    workflow.add_node("emergency_intent_guard", emergency_intent_guard)
     workflow.add_node("classify_intent", classify_intent)
     workflow.add_node("handle_log_meal", handle_log_meal)
     workflow.add_node("handle_get_pet_profile", handle_get_pet_profile)
@@ -97,7 +100,8 @@ def create_agent_graph() -> StateGraph:
         should_process_pending,
         {
             "process_pending": "process_pending_confirmation",
-            "classify_intent": "classify_intent",
+            # 非待确认场景先过紧急意图守卫，再走 classify_intent
+            "classify_intent": "emergency_intent_guard",
         }
     )
 
@@ -123,6 +127,16 @@ def create_agent_graph() -> StateGraph:
     workflow.add_edge("process_pending_confirmation", "generate_response")
 
     # ========== 正常对话流程 ==========
+    # 紧急意图守卫：命中高风险关键词直接跳到 generate_response（跳过 LLM 意图分类）
+    workflow.add_conditional_edges(
+        "emergency_intent_guard",
+        should_bypass_for_emergency,
+        {
+            "generate_response": "generate_response",
+            "classify_intent": "classify_intent",
+        }
+    )
+
     # 添加条件边：根据意图选择下一个节点
     workflow.add_conditional_edges(
         "classify_intent",
