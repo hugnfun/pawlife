@@ -461,12 +461,12 @@ async def get_vaccine_records(
 
         from models.pet import VaccineRecord
 
-        stmt = select(VaccineRecord).where(
+        vaccine_stmt = select(VaccineRecord).where(
             VaccineRecord.pet_id == pet_id
         ).order_by(VaccineRecord.administered_date.desc())
 
-        result = await db.execute(stmt)
-        records = result.scalars().all()
+        vaccine_result = await db.execute(vaccine_stmt)
+        records = vaccine_result.scalars().all()
 
         return [
             {
@@ -532,15 +532,15 @@ async def get_diet_recipe(
 
         from models.recipe import Recipe, RecipeIngredient
 
-        stmt = select(Recipe).where(
+        recipe_stmt = select(Recipe).where(
             and_(
                 Recipe.pet_id == pet_id,
                 Recipe.is_active == True,
             )
         ).order_by(Recipe.created_at.desc()).limit(1)
 
-        result = await db.execute(stmt)
-        recipe = result.scalar_one_or_none()
+        recipe_result = await db.execute(recipe_stmt)
+        recipe = recipe_result.scalar_one_or_none()
 
         if recipe is None:
             return None

@@ -7,7 +7,7 @@ Redis 服务模块。
 import json
 from contextlib import asynccontextmanager
 from datetime import timedelta
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 
 import redis.asyncio as redis
 from redis.asyncio import ConnectionPool, Redis
@@ -43,7 +43,7 @@ class RedisService:
         return redis.Redis(connection_pool=self.pool)
 
     @asynccontextmanager
-    async def get_client(self) -> Redis:
+    async def get_client(self) -> AsyncGenerator[Redis, None]:
         """获取 Redis 客户端的上下文管理器。
 
         Yields:

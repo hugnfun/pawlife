@@ -32,7 +32,7 @@ PERMISSIONS: Dict[str, Dict[str, Set[str]]] = {
         "health_report": {"read", "create"},
         "reminder": {"read", "create", "update"},
         "user": {"read"},
-        "audit": {},
+        "audit": set(),
     },
     "MEMBER": {
         "pet": {"read"},
@@ -41,7 +41,7 @@ PERMISSIONS: Dict[str, Dict[str, Set[str]]] = {
         "health_report": {"read"},
         "reminder": {"read"},
         "user": {"read"},
-        "audit": {},
+        "audit": set(),
     },
 }
 

@@ -13,7 +13,7 @@ Round 2 改造要点：
 import logging
 import time
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -70,7 +70,7 @@ def log_cache_event(
         detail: 附加信息（如失效的 key 数量、错误类型）
         duration_ms: 事件耗时（毫秒），仅命中/set 场景填写
     """
-    payload = {
+    payload: Dict[str, Any] = {
         "event": f"cache.{action}",
         "prefix": prefix,
         "pet_id": pet_id,
@@ -783,14 +783,14 @@ async def delete_weight_log(
 
 # ==================== 双通道输入：草稿确认（requirements-v1.1.md §2） ====================
 
-_PERSIST_MAP = {
+_PERSIST_MAP: Dict[str, Any] = {
     "meal": None,      # 延迟绑定以避免 tools.py 循环 import
     "weight": None,
     "activity": None,
 }
 
 
-def _get_persist_fn(log_type: str):
+def _get_persist_fn(log_type: str) -> Any:
     """按需加载 tools.py 中的 _persist_xxx 函数（避免顶层循环 import）。"""
     if _PERSIST_MAP["meal"] is None:
         from services.agent.tools import _persist_activity, _persist_meal, _persist_weight
@@ -842,6 +842,11 @@ async def confirm_log_draft(
         )
 
     log_type = draft.get("type")
+    if not isinstance(log_type, str):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="草稿类型无效",
+        )
     persist_fn = _get_persist_fn(log_type)
     if persist_fn is None:
         raise HTTPException(
@@ -946,7 +951,7 @@ async def get_log_draft(
 
     return PendingLogConfirmation(
         draft_id=draft_id,
-        log_type=draft.get("type"),
+        log_type=draft.get("type") or "",
         pet_id=UUID(draft["pet_id"]),
         payload=draft.get("payload", {}),
         summary=draft.get("summary", ""),

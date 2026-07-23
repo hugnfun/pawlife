@@ -175,8 +175,8 @@ async def get_family(
             )
 
         # 获取家庭组信息
-        stmt = select(Family).where(Family.id == family_id)
-        result = await db.execute(stmt)
+        family_stmt = select(Family).where(Family.id == family_id)
+        result = await db.execute(family_stmt)
         family = result.scalar_one_or_none()
 
         if family is None:
@@ -239,7 +239,7 @@ async def list_family_members(
             )
 
         # 获取成员列表
-        stmt = (
+        member_stmt = (
             select(FamilyMember, User)
             .join(User, FamilyMember.user_id == User.id)
             .where(FamilyMember.family_id == family_id)
@@ -248,7 +248,7 @@ async def list_family_members(
                 FamilyMember.joined_at.asc()
             )
         )
-        result = await db.execute(stmt)
+        result = await db.execute(member_stmt)
         rows = result.all()
 
         members = []
@@ -311,13 +311,13 @@ async def join_family(
             )
 
         # 检查是否已经是成员
-        stmt = select(FamilyMember).where(
+        member_stmt = select(FamilyMember).where(
             and_(
                 FamilyMember.family_id == family.id,
                 FamilyMember.user_id == current_user.id,
             )
         )
-        result = await db.execute(stmt)
+        result = await db.execute(member_stmt)
         existing_member = result.scalar_one_or_none()
 
         if existing_member:
@@ -395,9 +395,9 @@ async def get_family_invite(
             )
 
         # 获取家庭组信息
-        stmt = select(Family).where(Family.id == family_id)
-        result = await db.execute(stmt)
-        family = result.scalar_one_or_none()
+        family_stmt = select(Family).where(Family.id == family_id)
+        family_result = await db.execute(family_stmt)
+        family = family_result.scalar_one_or_none()
 
         if family is None:
             raise HTTPException(

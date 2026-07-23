@@ -70,5 +70,5 @@ class AINutritionAnalysisResponse(BaseModel):
     meal_log_id: UUID = Field(..., description="饮食记录ID")
     nutrient_breakdown: Dict[str, float] = Field(..., description="营养成分分解")
     calorie_total: float = Field(..., description="总卡路里")
-    aafco_compliance: Dict[str, bool] = Field(..., description="AAFCO 标准符合情况")
+    aafco_compliance: Dict[str, Optional[bool]] = Field(..., description="AAFCO 标准符合情况")
     suggestions: List[str] = Field(..., description="改进建议")

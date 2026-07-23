@@ -90,13 +90,13 @@ async def get_family_members(
         family_id = memberships[0].family_id
 
         # 获取该家庭组的所有成员
-        stmt = (
+        member_stmt = (
             select(FamilyMember, User)
             .join(User, FamilyMember.user_id == User.id)
             .where(FamilyMember.family_id == family_id)
             .order_by(FamilyMember.role.desc(), FamilyMember.joined_at.asc())
         )
-        result = await db.execute(stmt)
+        result = await db.execute(member_stmt)
         rows = result.all()
 
         members = []
@@ -230,9 +230,9 @@ async def get_family_invite(
         # 使用第一个家庭组
         family_id = memberships[0].family_id
 
-        stmt = select(Family).where(Family.id == family_id)
-        result = await db.execute(stmt)
-        family = result.scalar_one_or_none()
+        family_stmt = select(Family).where(Family.id == family_id)
+        family_result = await db.execute(family_stmt)
+        family = family_result.scalar_one_or_none()
 
         if family is None:
             raise HTTPException(

@@ -6,7 +6,7 @@
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import AsyncIterator, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -35,7 +35,7 @@ router = APIRouter(prefix="/auth", tags=["认证"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token", auto_error=False)
 
 # 创建 HTTP 客户端
-async def get_httpx_client() -> httpx.AsyncClient:
+async def get_httpx_client() -> AsyncIterator[httpx.AsyncClient]:
     """获取异步 HTTP 客户端。"""
     async with httpx.AsyncClient(timeout=10.0) as client:
         yield client
