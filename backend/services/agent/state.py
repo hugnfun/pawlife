@@ -130,7 +130,7 @@ async def create_initial_state(
         # 加载 L1 历史
         history_data = await redis_service.get_session_history(session_id, max_messages=20)
         current_messages = [
-            AIMessage(role=msg["role"], content=msg["content"])
+            AIMessage(role=msg["role"], content=msg["content"])  # type: ignore[call-arg]
             for msg in history_data
         ]
     else:
@@ -142,7 +142,7 @@ async def create_initial_state(
         AIMessage(
             role="user",
             content=current_input,
-        )
+        )  # type: ignore[call-arg]
     )
 
     return AgentState(

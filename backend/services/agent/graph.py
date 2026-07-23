@@ -13,6 +13,8 @@ LangGraph 工作流组装（包含新用户建档引导）。
               handle_log_meal → generate_response → END
 """
 
+from typing import Optional
+
 from langgraph.graph import END, StateGraph
 
 from .nodes import (
@@ -38,7 +40,7 @@ from .nodes import (
 from .state import AgentState
 
 # 全局缓存编译好的图
-_agent_graph: StateGraph = None
+_agent_graph: Optional[StateGraph] = None
 
 
 def create_agent_graph() -> StateGraph:
@@ -162,7 +164,7 @@ def create_agent_graph() -> StateGraph:
     workflow.add_edge("generate_response", END)
 
     # 编译图
-    return workflow.compile()
+    return workflow.compile()  # type: ignore[return-value]
 
 
 def get_agent_graph() -> StateGraph:
@@ -175,6 +177,8 @@ def get_agent_graph() -> StateGraph:
         编译好的 Agent 图
     """
     global _agent_graph
-    if _agent_graph is None:
-        _agent_graph = create_agent_graph()
-    return _agent_graph
+    graph = _agent_graph
+    if graph is None:
+        graph = create_agent_graph()
+        _agent_graph = graph
+    return graph

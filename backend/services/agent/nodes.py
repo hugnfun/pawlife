@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import BaseMessage, SystemMessage
 from sqlalchemy import func, select
 
 from core.config import settings
@@ -373,9 +373,9 @@ def get_llm() -> BaseChatModel:
     if settings.anthropic_api_key:
         from langchain_anthropic import ChatAnthropic
         return ChatAnthropic(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-3-5-sonnet-20241022",  # type: ignore[call-arg]
             temperature=0.7,
-            api_key=settings.anthropic_api_key,
+            api_key=settings.anthropic_api_key,  # type: ignore[arg-type]
             streaming=True,
         )
 
@@ -385,7 +385,7 @@ def get_llm() -> BaseChatModel:
         return ChatOpenAI(
             model=settings.deepseek_model,
             temperature=0.7,
-            api_key=settings.deepseek_api_key,
+            api_key=settings.deepseek_api_key,  # type: ignore[arg-type]
             base_url=settings.deepseek_base_url,
             streaming=True,
         )
@@ -395,7 +395,7 @@ def get_llm() -> BaseChatModel:
         return ChatOpenAI(
             model="gpt-4o-mini",
             temperature=0.7,
-            api_key=settings.openai_api_key,
+            api_key=settings.openai_api_key,  # type: ignore[arg-type]
             streaming=True,
         )
 
@@ -439,7 +439,7 @@ async def classify_intent(state: AgentState) -> Dict[str, Any]:
 
         # 解析 JSON 响应
         import json
-        content = response.content.strip()
+        content = str(response.content).strip()
         # 尝试提取 JSON
         if "```json" in content:
             content = content.split("```json")[1].split("```")[0].strip()
@@ -505,7 +505,6 @@ async def handle_log_meal(state: AgentState) -> Dict[str, Any]:
     Returns:
         更新后的状态字典
     """
-    from uuid import UUID
     pet_id = state.get("pet_id")
     user_id = state["user_id"]
     user_input = state["current_input"]
@@ -558,7 +557,7 @@ async def handle_log_meal(state: AgentState) -> Dict[str, Any]:
 
         # 解析 JSON
         import json
-        content = response.content.strip()
+        content = str(response.content).strip()
         if "```json" in content:
             content = content.split("```json")[1].split("```")[0].strip()
         elif "```" in content:
@@ -697,8 +696,9 @@ async def generate_response(state: AgentState) -> Dict[str, Any]:
         更新后的状态字典
     """
     # 紧急分支：已有固定回复，跳过 LLM 调用
-    if state.get("emergency_triggered") and state.get("response_content"):
-        response = _append_disclaimer_if_needed(state["response_content"], state)
+    response_content = state.get("response_content")
+    if state.get("emergency_triggered") and response_content:
+        response = _append_disclaimer_if_needed(response_content, state)
         logger.info("紧急分支直接输出固定文案，跳过 LLM（§4）")
         return {
             "response_content": response,
@@ -715,7 +715,7 @@ async def generate_response(state: AgentState) -> Dict[str, Any]:
     )
 
     # 构建完整消息列表
-    messages = [
+    messages: list[BaseMessage] = [
         SystemMessage(content=built_system_prompt),
     ]
 
@@ -726,8 +726,9 @@ async def generate_response(state: AgentState) -> Dict[str, Any]:
         extra_context_parts.append(f"- 用户意图: {state['intent']}")
 
     # 添加处理结果（如果是记录饮食）
-    if state.get("tool_outputs"):
-        for output in state["tool_outputs"]:
+    tool_outputs = state.get("tool_outputs") or []
+    if tool_outputs:
+        for output in tool_outputs:
             extra_context_parts.append(f"- 已完成: {output['tool_name']}")
             if output["data"]:
                 import json
@@ -753,8 +754,8 @@ async def generate_response(state: AgentState) -> Dict[str, Any]:
 
         # 注意：流式输出由 LangGraph 的 astream_events 在顶层处理
         # 这里节点内部不需要额外处理回调，LangChain 的 astream 会自动触发事件
-        response = await llm.ainvoke(messages)
-        full_response = response.content
+        llm_response = await llm.ainvoke(messages)
+        full_response = str(llm_response.content)
 
         logger.info(f"响应生成完成，长度: {len(full_response)}")
 
@@ -921,7 +922,7 @@ async def process_onboarding_step(state: AgentState) -> Dict[str, Any]:
         更新后的状态
     """
     current_step = state.get("onboarding_step", OnboardingStep.NOT_STARTED)
-    collected_data = state.get("onboarding_data", {}).copy()
+    collected_data = (state.get("onboarding_data") or {}).copy()
     user_input = state["current_input"]
 
     logger.info(f"处理建档步骤: step={current_step}, input={user_input[:30]}")
@@ -1045,7 +1046,7 @@ async def finalize_onboarding(state: AgentState) -> Dict[str, Any]:
         最终状态
     """
     user_id = state["user_id"]
-    collected_data = state.get("onboarding_data", {})
+    collected_data = state.get("onboarding_data") or {}
 
     logger.info(f"完成建档，开始写入数据库: user_id={user_id}, fields={list(collected_data.keys())}")
 
@@ -1072,7 +1073,7 @@ async def finalize_onboarding(state: AgentState) -> Dict[str, Any]:
         update_tool = TOOL_REGISTRY["update_pet_profile"]
 
         # 映射收集的数据到模型枚举字段
-        updates = {}
+        updates: Dict[str, Any] = {}
 
         if "species" in collected_data:
             species_map = {
@@ -1216,7 +1217,6 @@ async def handle_update_pet_profile(state: AgentState) -> Dict[str, Any]:
     Returns:
         更新后的状态字典
     """
-    from uuid import UUID
     pet_id = state.get("pet_id")
     user_input = state["current_input"]
 
@@ -1265,7 +1265,7 @@ async def handle_update_pet_profile(state: AgentState) -> Dict[str, Any]:
 
         # 解析 JSON
         import json
-        content = response.content.strip()
+        content = str(response.content).strip()
         if "```json" in content:
             content = content.split("```json")[1].split("```")[0].strip()
         elif "```" in content:
@@ -1285,7 +1285,7 @@ async def handle_update_pet_profile(state: AgentState) -> Dict[str, Any]:
 
         # 调用工具更新
         tool = TOOL_REGISTRY["update_pet_profile"]
-        result = await tool._arun(pet_id=UUID(pet_id), updates=updates)
+        result = await tool._arun(pet_id=pet_id, updates=updates)
 
         if result["success"]:
             logger.info(f"更新宠物档案成功: pet_id={pet_id}, updated_fields={list(updates.keys())}")
@@ -1367,7 +1367,7 @@ async def process_pending_confirmation(state: AgentState) -> Dict[str, Any]:
     """
     from uuid import UUID
     pending_type = state.get("pending_confirmation")
-    pending_data = state.get("pending_data", {})
+    pending_data = state.get("pending_data") or {}
     user_input = state["current_input"].lower()
     pet_id = state.get("pet_id")
     user_id = state["user_id"]

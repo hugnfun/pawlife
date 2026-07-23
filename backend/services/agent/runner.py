@@ -6,7 +6,7 @@ Agent 运行入口。
 """
 
 import logging
-from typing import Any, AsyncGenerator, Dict, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional
 from uuid import UUID
 
 from langchain_core.messages import BaseMessage
@@ -27,7 +27,7 @@ async def run_agent(
     pet_id: Optional[UUID] = None,
     message_type: str = "text",
     input_url: Optional[str] = None,
-    history: Optional[AIMessage] = None,
+    history: Optional[List[AIMessage]] = None,
 ) -> AIConversationResponse:
     """
     运行 Agent 非流式推理。
@@ -57,11 +57,11 @@ async def run_agent(
     )
 
     # 运行图
-    final_state = await agent_graph.ainvoke(initial_state)
+    final_state = await agent_graph.ainvoke(initial_state)  # type: ignore[attr-defined]
 
     # 检查错误
     if final_state.get("error") and not final_state.get("response_content"):
-        return AIConversationResponse(
+        return AIConversationResponse(  # type: ignore[call-arg]
             response=f"处理失败: {final_state['error']}",
             session_id=session_id,
             pet_id=pet_id,
@@ -84,7 +84,7 @@ async def run_agent_streaming(
     pet_id: Optional[UUID] = None,
     message_type: str = "text",
     input_url: Optional[str] = None,
-    history: Optional[AIMessage] = None,
+    history: Optional[List[AIMessage]] = None,
     onboarding_step: Optional[str] = None,
     onboarding_data: Optional[Dict[str, Any]] = None,
 ) -> AsyncGenerator[Any, None]:
@@ -135,7 +135,7 @@ async def run_agent_streaming(
     has_llm_stream = False
     pregenerated_response = None
 
-    async for event in agent_graph.astream_events(initial_state, version="v1"):
+    async for event in agent_graph.astream_events(initial_state, version="v1"):  # type: ignore[attr-defined]
         kind = event["event"]
 
         # 监听 LLM 流式输出事件，这是 Claude token 流的出口
@@ -169,9 +169,9 @@ async def run_agent_streaming(
             # 简单按段落分割输出，模拟流式效果
             import re
             paragraphs = re.split(r'(\n+)', pregenerated_response)
-            for chunk in paragraphs:
-                if chunk:
-                    yield chunk
+            for segment in paragraphs:
+                if segment:
+                    yield segment
 
     # 双通道输入：扫描 tool_outputs，若有 requires_confirmation 项则追加 confirmation_card 事件
     # 这样前端在文本流结束后可以立即渲染确认卡片，用户点击后走 /confirmations/*/confirm 端点
@@ -196,7 +196,7 @@ async def get_final_state(
     pet_id: Optional[UUID] = None,
     message_type: str = "text",
     input_url: Optional[str] = None,
-    history: Optional[AIMessage] = None,
+    history: Optional[List[AIMessage]] = None,
 ) -> AgentState:
     """
     获取完整的最终状态，用于调试或自定义处理。
@@ -218,5 +218,5 @@ async def get_final_state(
         stream_callback=None,
     )
 
-    final_state = await agent_graph.ainvoke(initial_state)
+    final_state = await agent_graph.ainvoke(initial_state)  # type: ignore[attr-defined]
     return final_state
