@@ -6,7 +6,7 @@ Agent 工具集合。
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 from uuid import UUID
 
 from langchain.tools import BaseTool
@@ -903,6 +903,7 @@ class EvaluateDietTool(BaseTool):
                         pet_species = pet.species.value if pet.species else "dog"
 
             # AAFCO 标准参考值（每 kg 体重每天）
+            standards: Dict[str, Union[float, Tuple[float, float]]] = {}
             if pet_species == "cat":
                 standards = {
                     "protein_g_per_kg": 2.5,
@@ -950,21 +951,24 @@ class EvaluateDietTool(BaseTool):
             warnings = []
 
             # 蛋白质
-            if protein_per_kg >= standards["protein_g_per_kg"]:
-                evaluations.append({"nutrient": "蛋白质", "status": "达标", "actual": round(protein_per_kg, 2), "recommended": standards["protein_g_per_kg"]})
+            protein_standard = float(standards["protein_g_per_kg"])  # type: ignore[arg-type]
+            if protein_per_kg >= protein_standard:
+                evaluations.append({"nutrient": "蛋白质", "status": "达标", "actual": round(protein_per_kg, 2), "recommended": protein_standard})
             else:
-                evaluations.append({"nutrient": "蛋白质", "status": "不足", "actual": round(protein_per_kg, 2), "recommended": standards["protein_g_per_kg"]})
-                warnings.append(f"蛋白质摄入不足：当前 {protein_per_kg:.1f}g/kg，建议 ≥ {standards['protein_g_per_kg']}g/kg")
+                evaluations.append({"nutrient": "蛋白质", "status": "不足", "actual": round(protein_per_kg, 2), "recommended": protein_standard})
+                warnings.append(f"蛋白质摄入不足：当前 {protein_per_kg:.1f}g/kg，建议 ≥ {protein_standard}g/kg")
 
             # 脂肪
-            if fat_per_kg >= standards["fat_g_per_kg"]:
-                evaluations.append({"nutrient": "脂肪", "status": "达标", "actual": round(fat_per_kg, 2), "recommended": standards["fat_g_per_kg"]})
+            fat_standard = float(standards["fat_g_per_kg"])  # type: ignore[arg-type]
+            if fat_per_kg >= fat_standard:
+                evaluations.append({"nutrient": "脂肪", "status": "达标", "actual": round(fat_per_kg, 2), "recommended": fat_standard})
             else:
-                evaluations.append({"nutrient": "脂肪", "status": "不足", "actual": round(fat_per_kg, 2), "recommended": standards["fat_g_per_kg"]})
-                warnings.append(f"脂肪摄入不足：当前 {fat_per_kg:.1f}g/kg，建议 ≥ {standards['fat_g_per_kg']}g/kg")
+                evaluations.append({"nutrient": "脂肪", "status": "不足", "actual": round(fat_per_kg, 2), "recommended": fat_standard})
+                warnings.append(f"脂肪摄入不足：当前 {fat_per_kg:.1f}g/kg，建议 ≥ {fat_standard}g/kg")
 
             # 钙
-            ca_min, ca_max = standards["calcium_g_per_kg"]
+            ca_range = standards["calcium_g_per_kg"]  # type: ignore[assignment]
+            ca_min, ca_max = ca_range  # type: ignore[misc]
             if ca_min <= calcium_per_kg_g <= ca_max:
                 evaluations.append({"nutrient": "钙", "status": "达标", "actual": round(calcium_per_kg_g, 2), "recommended": f"{ca_min}-{ca_max}"})
             elif calcium_per_kg_g < ca_min:
@@ -975,7 +979,8 @@ class EvaluateDietTool(BaseTool):
                 warnings.append(f"⚠️ 钙摄入过量：当前 {calcium_per_kg_g:.2f}g/kg，建议 {ca_min}-{ca_max}g/kg，过量可能影响健康")
 
             # 磷
-            p_min, p_max = standards["phosphorus_g_per_kg"]
+            p_range = standards["phosphorus_g_per_kg"]  # type: ignore[assignment]
+            p_min, p_max = p_range  # type: ignore[misc]
             if p_min <= phosphorus_per_kg_g <= p_max:
                 evaluations.append({"nutrient": "磷", "status": "达标", "actual": round(phosphorus_per_kg_g, 2), "recommended": f"{p_min}-{p_max}"})
             elif phosphorus_per_kg_g < p_min:
@@ -1102,9 +1107,9 @@ class GenerateRecipeTool(BaseTool):
             safe_foods = []
             async with db.get_session() as session:
                 from models.nutrition import FoodNutrition
-                stmt = select(FoodNutrition).where(FoodNutrition.is_pet_safe == True).limit(50)
-                result = await session.execute(stmt)
-                foods = result.scalars().all()
+                food_stmt = select(FoodNutrition).where(FoodNutrition.is_pet_safe == True).limit(50)
+                food_result = await session.execute(food_stmt)
+                foods = food_result.scalars().all()
                 safe_foods = [
                     {
                         "name": f.food_name,
@@ -1130,15 +1135,15 @@ class GenerateRecipeTool(BaseTool):
 
                     llm = ChatAnthropic(
                         model="claude-sonnet-4-20250514",
-                        anthropic_api_key=settings.anthropic_api_key,
-                    ) if settings.anthropic_api_key else None
+                        anthropic_api_key=settings.anthropic_api_key,  # type: ignore[call-arg]
+                    ) if settings.anthropic_api_key else None  # type: ignore[call-arg]
 
                     if not llm and settings.openai_api_key:
                         from langchain_openai import ChatOpenAI
                         llm = ChatOpenAI(
                             model="gpt-4o-mini",
-                            openai_api_key=settings.openai_api_key,
-                        )
+                            openai_api_key=settings.openai_api_key,  # type: ignore[call-arg]
+                        )  # type: ignore[assignment]
 
                     if llm:
                         prompt = f"""你是一位宠物营养师。请根据以下信息生成一个一日食谱。
@@ -1160,7 +1165,7 @@ class GenerateRecipeTool(BaseTool):
 
                         response = await llm.ainvoke([HumanMessage(content=prompt)])
                         import json
-                        recipe_content = json.loads(response.content)
+                        recipe_content = json.loads(str(response.content))
                         ingredients_data = recipe_content.get("meals", [])
 
                 except Exception as llm_err:
@@ -1474,7 +1479,7 @@ class TranscribeVoiceTool(BaseTool):
         # 排序参数并签名
         params_str = "&".join(f"{k}={params[k]}" for k in sorted(params))
         sign_str = "GETasr.cloud.tencent.com/asr/v2/?" + params_str
-        secret_key_bytes = settings.tencent_secret_key.encode("utf-8")
+        secret_key_bytes = settings.tencent_secret_key.encode("utf-8")  # type: ignore[union-attr]
         signature = hmac.new(secret_key_bytes, sign_str.encode("utf-8"), hashlib.sha1).digest()
         signature_b64 = base64.b64encode(signature).decode("utf-8")
 
@@ -1623,7 +1628,7 @@ class SearchNearbyHospitalTool(BaseTool):
             params["key"] = map_key
 
             async with httpx.AsyncClient(timeout=15.0) as client:
-                resp = await client.get(api_url, params=params)
+                resp = await client.get(api_url, params=params)  # type: ignore[arg-type]
                 resp.raise_for_status()
                 result = resp.json()
 
@@ -1985,7 +1990,7 @@ class GenerateHealthReportTool(BaseTool):
                     MealLog.meal_time <= end_date,
                 ).order_by(MealLog.meal_time.desc())
                 daily_meals_result = await session.execute(daily_meals_stmt)
-                recent_meals = daily_meals_result.scalars().limit(10).all()
+                recent_meals = daily_meals_result.scalars().all()[:10]
 
                 # 运动统计
                 activity_stmt = select(
@@ -2009,7 +2014,7 @@ class GenerateHealthReportTool(BaseTool):
                 weight_records = weight_result.scalars().all()
 
             # 构建结构化数据
-            weight_trend = []
+            weight_trend: List[Dict[str, Any]] = []
             prev_weight = None
             for w in weight_records:
                 change = None
@@ -2030,12 +2035,12 @@ class GenerateHealthReportTool(BaseTool):
                     if settings.anthropic_api_key:
                         from langchain_anthropic import ChatAnthropic
                         from langchain_core.messages import HumanMessage
-                        llm = ChatAnthropic(model="claude-sonnet-4-20250514", anthropic_api_key=settings.anthropic_api_key)
+                        llm = ChatAnthropic(model="claude-sonnet-4-20250514", anthropic_api_key=settings.anthropic_api_key)  # type: ignore[call-arg]
 
                     if not llm and settings.openai_api_key:
                         from langchain_core.messages import HumanMessage
                         from langchain_openai import ChatOpenAI
-                        llm = ChatOpenAI(model="gpt-4o-mini", openai_api_key=settings.openai_api_key)
+                        llm = ChatOpenAI(model="gpt-4o-mini", openai_api_key=settings.openai_api_key)  # type: ignore[call-arg,assignment]
 
                     if llm:
                         summary_data = f"""宠物：{pet.name}（{pet.species.value}，{'已绝育' if pet.neutered_status.value == 'neutered' else '未绝育'}）
@@ -2052,7 +2057,7 @@ class GenerateHealthReportTool(BaseTool):
 - 总运动时长：{int(activity_stats.total_duration_min or 0)} 分钟
 
 体重趋势：
-{chr(10).join(f"  {w['date']}: {w['weight_kg']}kg ({'+' + str(w['change_kg']) if w['change_kg'] and w['change_kg'] > 0 else w['change_kg']})" for w in weight_trend[-5:]) if weight_trend else '  无记录'}
+{chr(10).join(f"  {w['date']}: {w['weight_kg']}kg ({'+' + str(w['change_kg']) if w['change_kg'] and float(w['change_kg']) > 0 else w['change_kg']})" for w in weight_trend[-5:]) if weight_trend else '  无记录'}
 
 请基于以上数据，生成一份简洁的宠物健康报告。包括：
 1. 总体健康评估（1-2句）
@@ -2062,7 +2067,7 @@ class GenerateHealthReportTool(BaseTool):
 5. 改善建议（如果有）"""
 
                         response = await llm.ainvoke([HumanMessage(content=summary_data)])
-                        report_text = response.content
+                        report_text = str(response.content)
 
                 except Exception as llm_err:
                     logger.warning(f"LLM report generation failed, using template: {llm_err}")
@@ -2071,8 +2076,8 @@ class GenerateHealthReportTool(BaseTool):
             if not report_text:
                 weight_status = "稳定"
                 if len(weight_trend) >= 2:
-                    first_w = weight_trend[0]["weight_kg"]
-                    last_w = weight_trend[-1]["weight_kg"]
+                    first_w = float(weight_trend[0]["weight_kg"])
+                    last_w = float(weight_trend[-1]["weight_kg"])
                     diff = last_w - first_w
                     if abs(diff) > 0.3:
                         weight_status = f"{'增加' if diff > 0 else '减少'}了 {abs(diff):.1f}kg"
