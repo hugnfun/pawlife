@@ -80,3 +80,26 @@ class UUIDMixin:
         nullable=False,
         comment="唯一标识",
     )
+
+
+class CorrectionMixin:
+    """数据纠错混入类（requirements-v1.1.md §3）。
+
+    为日志模型添加纠错追踪字段，支持用户通过对话纠正已记录的错误数据。
+    """
+
+    corrected_from_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="指向被纠正的原始记录ID",
+    )
+    correction_reason: Mapped[str | None] = mapped_column(
+        nullable=True,
+        comment="纠正原因摘要",
+    )
+    is_corrected: Mapped[bool] = mapped_column(
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+        comment="是否为纠正版本",
+    )

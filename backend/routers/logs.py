@@ -288,7 +288,7 @@ async def list_meal_logs(
             logger.warning("Redis 缓存读取失败，降级查 DB", exc_info=True)
 
         # --- DB 查询（缓存未命中） ---
-        conditions = [MealLog.pet_id == pet_id]
+        conditions = [MealLog.pet_id == pet_id, MealLog.is_corrected == False]  # noqa: E712
         if start_date:
             conditions.append(MealLog.meal_time >= start_date)
         if end_date:
@@ -491,7 +491,7 @@ async def list_activity_logs(
             logger.warning("Redis 缓存读取失败，降级查 DB", exc_info=True)
 
         # --- DB 查询（缓存未命中） ---
-        conditions = [ActivityLog.pet_id == pet_id]
+        conditions = [ActivityLog.pet_id == pet_id, ActivityLog.is_corrected == False]  # noqa: E712
         if start_date:
             conditions.append(ActivityLog.activity_time >= start_date)
         if end_date:
@@ -687,12 +687,12 @@ async def list_weight_logs(
             logger.warning("Redis 缓存读取失败，降级查 DB", exc_info=True)
 
         # Round 2：COUNT 与分页解耦，避免 len(all()) 全表加载
-        count_stmt = select(func.count()).select_from(WeightLog).where(WeightLog.pet_id == pet_id)
+        count_stmt = select(func.count()).select_from(WeightLog).where(WeightLog.pet_id == pet_id, WeightLog.is_corrected == False)  # noqa: E712
         total_all = (await db.execute(count_stmt)).scalar_one()
 
         stmt = (
             select(WeightLog)
-            .where(WeightLog.pet_id == pet_id)
+            .where(WeightLog.pet_id == pet_id, WeightLog.is_corrected == False)  # noqa: E712
             .order_by(desc(WeightLog.measurement_time))
             .limit(limit)
         )

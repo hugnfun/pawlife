@@ -2138,6 +2138,150 @@ class GenerateHealthReportTool(BaseTool):
             }
 
 
+# ========== 数据纠错工具（requirements-v1.1.md §3） ==========
+
+class CorrectLastLogInput(BaseModel):
+    """数据纠错工具的输入参数。"""
+    pet_id: str = Field(description="宠物ID")
+    log_type: str = Field(description="日志类型：meal / activity / weight")
+    corrections: Dict[str, Any] = Field(description="要修改的字段和值，如 {\"amount\": 40, \"food_name\": \"鸡胸肉\"}")
+    reason: str = Field(default="", description="纠正原因")
+
+
+class CorrectLastLogTool(BaseTool):
+    """数据纠错工具（requirements-v1.1.md §3）。
+
+    定位某宠物最近一条指定类型的日志记录，创建一条纠正版本，
+    原记录标记 is_corrected=True，新记录 corrected_from_id 指向原记录。
+
+    用户说「刚才记错了，三花吃的是 40g 不是 50g」时触发。
+    """
+    name: str = "correct_last_log"
+    description: str = "纠正最近一条日志记录（饮食/活动/体重），会创建纠正版本而非直接修改"
+    args_schema: type[BaseModel] = CorrectLastLogInput
+
+    def _run(self, **kwargs: Any) -> Dict[str, Any]:
+        return {"success": False, "error": "Sync not supported, use async", "data": None}
+
+    async def _arun(
+        self,
+        pet_id: str,
+        log_type: str,
+        corrections: Dict[str, Any],
+        reason: str = "",
+    ) -> Dict[str, Any]:
+        """异步执行：定位最近一条记录，创建纠正版本。
+
+        Args:
+            pet_id: 宠物ID
+            log_type: 日志类型 (meal / activity / weight)
+            corrections: 要修改的字段和值
+            reason: 纠正原因
+
+        Returns:
+            纠正结果：{success, data: {original_id, corrected_id, changes}}
+        """
+        from uuid import UUID as UUIDType
+
+        from sqlalchemy import select
+
+        from models.log import ActivityLog, MealLog, WeightLog
+        from services.database import db
+
+        try:
+            pet_uuid = UUIDType(pet_id) if isinstance(pet_id, str) else pet_id
+
+            model_map: Dict[str, Tuple[Any, str]] = {
+                "meal": (MealLog, "meal_time"),
+                "activity": (ActivityLog, "activity_time"),
+                "weight": (WeightLog, "measurement_time"),
+            }
+
+            if log_type not in model_map:
+                return {
+                    "success": False,
+                    "error": f"不支持的日志类型: {log_type}，支持: meal / activity / weight",
+                    "data": None,
+                }
+
+            Model, time_field = model_map[log_type]
+
+            async with db.get_session() as session:
+                # 查找最近一条未被纠正的记录
+                time_col = getattr(Model, time_field)
+                stmt = (
+                    select(Model)
+                    .where(Model.pet_id == pet_uuid)
+                    .where(Model.is_corrected == False)  # noqa: E712
+                    .order_by(time_col.desc())
+                    .limit(1)
+                )
+                result = await session.execute(stmt)
+                original: Any = result.scalar_one_or_none()
+
+                if original is None:
+                    return {
+                        "success": False,
+                        "error": f"未找到可纠正的{log_type}记录",
+                        "data": None,
+                    }
+
+                # 标记原记录为已纠正
+                original.is_corrected = True
+                original.correction_reason = reason or "用户纠正"
+
+                # 创建纠正版本（复制原记录，覆盖修改字段）
+                corrected = Model()
+                corrected.pet_id = original.pet_id
+                corrected.user_id = original.user_id
+                corrected.corrected_from_id = original.id
+                corrected.correction_reason = reason or "用户纠正"
+                corrected.is_corrected = False  # 纠正版本本身未被纠正
+
+                # 复制所有列的值
+                for col in Model.__table__.columns:
+                    if col.name in ("id", "created_at", "updated_at", "corrected_from_id", "correction_reason", "is_corrected"):
+                        continue
+                    if hasattr(original, col.name):
+                        setattr(corrected, col.name, getattr(original, col.name))
+
+                # 应用用户修改
+                applied_changes: Dict[str, Any] = {}
+                for field, value in corrections.items():
+                    if hasattr(corrected, field):
+                        setattr(corrected, field, value)
+                        applied_changes[field] = value
+
+                session.add(corrected)
+                await session.commit()
+                await session.refresh(corrected)
+
+                logger.info(
+                    f"数据纠正完成: log_type={log_type}, original_id={original.id}, "
+                    f"corrected_id={corrected.id}, changes={list(applied_changes.keys())}"
+                )
+
+                return {
+                    "success": True,
+                    "error": None,
+                    "data": {
+                        "original_id": str(original.id),
+                        "corrected_id": str(corrected.id),
+                        "log_type": log_type,
+                        "changes": applied_changes,
+                        "reason": reason or "用户纠正",
+                    },
+                }
+
+        except Exception as e:
+            logger.error(f"数据纠正失败: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": f"纠正失败: {str(e)}",
+                "data": None,
+            }
+
+
 # ========== 获取所有工具 ==========
 
 def get_all_tools() -> List[BaseTool]:
@@ -2152,6 +2296,8 @@ def get_all_tools() -> List[BaseTool]:
         LogMealTool(),
         LogActivityTool(),
         LogWeightTool(),
+        # 数据纠错
+        CorrectLastLogTool(),
         # 营养分析
         CalculateNutritionTool(),
         EvaluateDietTool(),
