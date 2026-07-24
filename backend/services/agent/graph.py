@@ -25,6 +25,7 @@ from .nodes import (
     emergency_intent_guard,
     finalize_onboarding,
     generate_response,
+    handle_correct_log,
     handle_error,
     handle_get_pet_profile,
     handle_log_meal,
@@ -78,6 +79,7 @@ def create_agent_graph() -> StateGraph:
     workflow.add_node("handle_log_meal", handle_log_meal)
     workflow.add_node("handle_get_pet_profile", handle_get_pet_profile)
     workflow.add_node("handle_update_pet_profile", handle_update_pet_profile)
+    workflow.add_node("handle_correct_log", handle_correct_log)
     workflow.add_node("generate_response", generate_response)
     workflow.add_node("handle_error", handle_error)
 
@@ -148,6 +150,7 @@ def create_agent_graph() -> StateGraph:
             "log_meal": "handle_log_meal",
             "get_pet_profile": "handle_get_pet_profile",
             "update_pet_profile": "handle_update_pet_profile",
+            "correct_log": "handle_correct_log",
             "handle_error": "handle_error",
         }
     )
@@ -156,6 +159,7 @@ def create_agent_graph() -> StateGraph:
     workflow.add_edge("handle_log_meal", "generate_response")
     workflow.add_edge("handle_get_pet_profile", "generate_response")
     workflow.add_edge("handle_update_pet_profile", "generate_response")
+    workflow.add_edge("handle_correct_log", "generate_response")
 
     # handle_error 完成后到 END
     workflow.add_edge("handle_error", END)

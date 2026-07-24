@@ -280,7 +280,8 @@ async def build_system_prompt(
             # 1. 近 7 天体重记录平均体重
             weight_stmt = select(func.avg(WeightLog.weight))\
                 .where(WeightLog.pet_id == pet_id)\
-                .where(WeightLog.measurement_time >= seven_days_ago)
+                .where(WeightLog.measurement_time >= seven_days_ago)\
+                .where(WeightLog.is_corrected == False)  # noqa: E712
             avg_weight_result = await session.execute(weight_stmt)
             avg_weight = avg_weight_result.scalar_one_or_none()
 
@@ -288,14 +289,16 @@ async def build_system_prompt(
             today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
             meal_stmt = select(func.count(MealLog.id), func.sum(MealLog.amount))\
                 .where(MealLog.pet_id == pet_id)\
-                .where(MealLog.meal_time >= today_start)
+                .where(MealLog.meal_time >= today_start)\
+                .where(MealLog.is_corrected == False)  # noqa: E712
             meal_result = await session.execute(meal_stmt)
             meal_count, total_amount_g = meal_result.one()
 
             # 3. 近 7 天活动次数
             activity_stmt = select(func.count(ActivityLog.id))\
                 .where(ActivityLog.pet_id == pet_id)\
-                .where(ActivityLog.activity_time >= seven_days_ago)
+                .where(ActivityLog.activity_time >= seven_days_ago)\
+                .where(ActivityLog.is_corrected == False)  # noqa: E712
             activity_result = await session.execute(activity_stmt)
             activity_count = activity_result.scalar_one_or_none()
 
@@ -340,7 +343,7 @@ async def build_system_prompt(
     return "\n".join(prompt_parts)
 
 INTENT_CLASSIFICATION_PROMPT = """
-请对用户的输入进行意图分类，区分以下四种：
+请对用户的输入进行意图分类，区分以下五种：
 
 1. **chit_chat** - 一般性闲聊、问候、宠物健康知识问答，可以直接回答，不需要读写数据
    示例："你好"、"狗狗拉肚子该怎么办"、"猫咪需要补钙吗"、"介绍一下这个 app"
@@ -354,9 +357,12 @@ INTENT_CLASSIFICATION_PROMPT = """
 4. **update_pet_profile** - 用户想要更新宠物档案信息，比如修改体重、绝育状态等
    示例："豆豆刚称了体重，32kg"、"豆豆昨天绝育了"、"把拉拉的年龄改成3岁"、"更新猫咪的体重"
 
+5. **correct_log** - 用户想要纠正之前记录的错误数据（饮食/活动/体重）
+   示例："刚才记错了，吃的是40g不是50g"、"上次体重记错了，应该是5.2kg"、"记错了，散步是30分钟不是20分钟"
+
 请以 JSON 格式返回：
 {{
-  "intent": "chit_chat" / "log_meal" / "get_pet_profile" / "update_pet_profile",
+  "intent": "chit_chat" / "log_meal" / "get_pet_profile" / "update_pet_profile" / "correct_log",
   "confidence": 0.0-1.0,
   "reasoning": "一句话说明判断理由"
 }}
@@ -489,6 +495,8 @@ def route_by_intent(state: AgentState) -> str:
         return "handle_get_pet_profile"
     elif intent == "update_pet_profile":
         return "handle_update_pet_profile"
+    elif intent == "correct_log":
+        return "handle_correct_log"
     else:
         return "generate_response"
 
@@ -788,6 +796,109 @@ async def generate_response(state: AgentState) -> Dict[str, Any]:
         return {
             "response_content": None,
             "error": f"响应生成失败: {str(e)}",
+        }
+
+
+async def handle_correct_log(state: AgentState) -> Dict[str, Any]:
+    """处理数据纠错意图（requirements-v1.1.md §3）。
+
+    用 LLM 从用户输入中提取纠错信息（日志类型、修改字段、原因），
+    然后调用 correct_last_log 工具创建纠正版本。
+
+    Args:
+        state: 当前 Agent 状态
+
+    Returns:
+        更新后的状态字典
+    """
+    pet_id = state.get("pet_id")
+    user_input = state["current_input"]
+
+    logger.info(f"处理数据纠错: pet_id={pet_id}, input={user_input[:80]}")
+
+    if not pet_id:
+        return {
+            "tool_outputs": [{
+                "tool_name": "correct_last_log",
+                "success": False,
+                "error": "未选择当前宠物，请先选择宠物",
+                "data": None,
+            }],
+            "error": "No active pet selected",
+        }
+
+    try:
+        llm = get_llm()
+        extract_prompt = """
+请从用户的输入中提取数据纠错信息。用户想要纠正之前记录的错误数据。
+
+需要提取：
+1. log_type: 要纠正的日志类型（meal=饮食 / activity=活动 / weight=体重）
+2. corrections: 要修改的字段和值（JSON 对象）
+3. reason: 纠正原因（一句话）
+
+常见字段对应：
+- 饮食(meal): food_name, amount, unit, meal_time, notes
+- 活动(activity): activity_type, duration_minutes, intensity, activity_time, notes
+- 体重(weight): weight, measurement_time, notes
+
+用户输入：{user_input}
+
+请以 JSON 格式返回：
+{{
+  "log_type": "meal",
+  "corrections": {{"amount": 40}},
+  "reason": "用户说吃的是40g不是50g"
+}}
+
+只返回 JSON，不要其他文字。
+"""
+        messages = [SystemMessage(content=extract_prompt.format(user_input=user_input))]
+        response = await llm.ainvoke(messages)
+
+        import json
+        content = str(response.content).strip()
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0].strip()
+
+        correction_data = json.loads(content)
+        log_type = correction_data.get("log_type", "meal")
+        corrections = correction_data.get("corrections", {})
+        reason = correction_data.get("reason", "")
+
+        logger.info(f"纠错提取: log_type={log_type}, corrections={corrections}")
+
+        from .tools import TOOL_REGISTRY
+        tool = TOOL_REGISTRY["correct_last_log"]
+        result = await tool._arun(
+            pet_id=str(pet_id),
+            log_type=log_type,
+            corrections=corrections,
+            reason=reason,
+        )
+
+        return {
+            "tool_outputs": [{
+                "tool_name": "correct_last_log",
+                "success": result["success"],
+                "error": result["error"],
+                "data": result["data"],
+            }],
+            "error": result["error"],
+        }
+
+    except Exception as e:
+        logger.error(f"数据纠错失败: {e}", exc_info=True)
+        return {
+            "tool_outputs": [{
+                "tool_name": "correct_last_log",
+                "success": False,
+                "error": str(e),
+                "data": None,
+            }],
+            "error": f"纠错失败: {str(e)}",
         }
 
 

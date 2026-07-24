@@ -13,14 +13,14 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import Enum, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from .base import Base, TimeStampMixin, UUIDMixin
+from .base import Base, CorrectionMixin, TimeStampMixin, UUIDMixin
 
 if TYPE_CHECKING:
     from .pet import Pet
     from .user import User
 
 
-class MealLog(Base, UUIDMixin, TimeStampMixin):
+class MealLog(Base, UUIDMixin, TimeStampMixin, CorrectionMixin):
     """饮食记录模型。
 
     Attributes:
@@ -117,7 +117,7 @@ class MealLog(Base, UUIDMixin, TimeStampMixin):
         return f"<MealLog(id={self.id}, pet_id={self.pet_id}, food={self.food_name}, amount={self.amount})>"
 
 
-class ActivityLog(Base, UUIDMixin, TimeStampMixin):
+class ActivityLog(Base, UUIDMixin, TimeStampMixin, CorrectionMixin):
     """活动记录模型。"""
 
     class ActivityType(enum.Enum):
@@ -175,7 +175,7 @@ class ActivityLog(Base, UUIDMixin, TimeStampMixin):
         return f"<ActivityLog(id={self.id}, pet_id={self.pet_id}, type={self.activity_type}, duration={self.duration_minutes})>"
 
 
-class WeightLog(Base, UUIDMixin, TimeStampMixin):
+class WeightLog(Base, UUIDMixin, TimeStampMixin, CorrectionMixin):
     """体重记录模型。"""
 
     pet_id: Mapped[uuid.UUID] = mapped_column(
